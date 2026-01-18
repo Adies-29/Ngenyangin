@@ -1,0 +1,225 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+
+// --- 1. HANDLE SERVER ACTION (HAPUS PRODUK) ---
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const idToDelete = formData.get("id");
+
+        // Panggil Backend untuk hapus
+        const res = await fetch(`http://localhost:3000/api/products/${idToDelete}`, {
+            method: "DELETE",
+        });
+
+        if (res.ok) {
+            // Refresh halaman jika sukses
+            return Astro.redirect("/admin/products");
+        } else {
+            console.error("Gagal menghapus produk");
+        }
+    } catch (e) {
+        console.error("Error connection:", e);
+    }
+}
+
+// --- 2. FETCH DATA DARI BACKEND (Load Data) ---
+let allProducts: any[] = [];
+let categories: any[] = [];
+let groupedProducts: any = {};
+
+const formatRupiah = (num: number) => "Rp " + num.toLocaleString("id-ID");
+
+try {
+    // A. Ambil Data Kategori
+    const resCat = await fetch("http://localhost:3000/api/categories");
+    const dataCat = await resCat.json();
+    const rawCategories = dataCat.data || dataCat || [];
+
+    categories = rawCategories.map((c: any) => ({
+        id: c.CATEGORY_ID || c.id,
+        name: c.CATEGORY || c.name,
+    }));
+
+    // B. Ambil Data Produk
+    const resProd = await fetch("http://localhost:3000/api/products");
+    const dataProd = await resProd.json();
+    const rawProducts = dataProd.data || dataProd || [];
+
+    allProducts = rawProducts.map((p: any) => ({
+        id: p.PRODUCT_ID,
+        name: p.PRODUCT_NAME,
+        price: p.PRICE,
+        stock: p.STOCK,
+        categoryId: p.CATEGORY_ID,
+        image: p.IMAGE || "https://placehold.co/100x100?text=No+Img",
+    }));
+
+    // C. Grouping Produk per Kategori
+    categories.forEach((cat: any) => {
+        groupedProducts[cat.id] = allProducts.filter(
+            (p: any) => p.categoryId == cat.id,
+        );
+    });
+} catch (e) {
+    console.log("Error fetch data:", e);
+}
+---
+
+<AdminLayout title="Produk">
+    <div class="space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-black text-gray-800">Daftar Produk</h1>
+                <p class="text-gray-500">Kelola menu makanan dan minuman di sini.</p>
+            </div>
+            <a href="/admin/products/add" class="bg-[#FEB516] hover:bg-yellow-500 text-yellow-900 font-bold py-3 px-6 rounded-xl shadow-lg transition flex items-center gap-2">
+                <span>+</span> Tambah Produk
+            </a>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+            <div class="flex border-b border-gray-100 overflow-x-auto">
+                <button class="tab-btn active px-8 py-5 font-bold text-gray-500 hover:text-red-600 border-b-2 border-transparent hover:border-red-600 transition whitespace-nowrap" onclick="openTab(event, 'all')">
+                    Semua ({allProducts.length})
+                </button>
+                {categories.map((cat: any) => (
+                    <button class="tab-btn px-8 py-5 font-bold text-gray-500 hover:text-red-600 border-b-2 border-transparent hover:border-red-600 transition whitespace-nowrap" onclick={`openTab(event, 'cat-${cat.id}')`}>
+                        {cat.name} ({groupedProducts[cat.id]?.length || 0})
+                    </button>
+                ))}
+            </div>
+
+            <div class="p-6">
+                <div id="all" class="tab-content block">
+                    {allProducts.length > 0 ? (
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-50 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                                    <tr>
+                                        <th class="p-4">Produk</th>
+                                        <th class="p-4">Harga</th>
+                                        <th class="p-4 text-center">Stok</th>
+                                        <th class="p-4 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 product-list">
+                                    {allProducts.map((item: any) => (
+                                        <tr class="product-row hover:bg-gray-50 transition group">
+                                            <td class="p-4 flex items-center gap-4">
+                                                <img src={item.image} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.name} onerror="this.src='https://placehold.co/100?text=No+Img'" />
+                                                <span class="font-bold text-gray-700">{item.name}</span>
+                                            </td>
+                                            <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.price)}</td>
+                                            <td class="p-4 text-center">
+                                                <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.stock > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
+                                                    {item.stock}
+                                                </span>
+                                            </td>
+                                            <td class="p-4 text-right">
+                                                <div class="flex items-center justify-end gap-2">
+                                                    <a href={"/admin/products/edit/" + item.id} class="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 p-2 rounded-lg transition inline-block mr-2" title="Edit">
+                                                        ✏️
+                                                    </a>
+                                                    <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.name}" selamanya?');`}>
+                                                        <input type="hidden" name="id" value={item.id} />
+                                                        <button type="submit" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="Hapus">
+                                                            🗑️
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div class="text-center py-20 text-gray-400">Belum ada data.</div>
+                    )}
+                </div>
+
+                {categories.map((cat: any) => (
+                    <div id={`cat-${cat.id}`} class="tab-content hidden">
+                        {groupedProducts[cat.id]?.length > 0 ? (
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-gray-50 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                                        <tr>
+                                            <th class="p-4">Produk</th>
+                                            <th class="p-4">Harga</th>
+                                            <th class="p-4 text-center">Stok</th>
+                                            <th class="p-4 text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        {groupedProducts[cat.id].map((item: any) => (
+                                            <tr class="hover:bg-gray-50 transition group">
+                                                <td class="p-4 flex items-center gap-4">
+                                                    <img src={item.image} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.name} onerror="this.src='https://placehold.co/100?text=No+Img'" />
+                                                    <span class="font-bold text-gray-700">{item.name}</span>
+                                                </td>
+                                                <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.price)}</td>
+                                                <td class="p-4 text-center">
+                                                    <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.stock > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
+                                                        {item.stock}
+                                                    </span>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <div class="flex items-center justify-end gap-2">
+                                                        <a href={"/admin/products/edit/" + item.id} class="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 p-2 rounded-lg transition inline-block mr-2" title="Edit">
+                                                            ✏️
+                                                        </a>
+                                                        <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.name}" selamanya?');`}>
+                                                            <input type="hidden" name="id" value={item.id} />
+                                                            <button type="submit" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="Hapus">
+                                                                🗑️
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div class="text-center py-20 text-gray-400">Tidak ada produk di kategori {cat.name}.</div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</AdminLayout>
+<script is:inline>
+    // 1. LOGIC PINDAH TAB (UI ONLY)
+    
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].classList.add("hidden");
+            tabcontent[i].classList.remove("block");
+        }
+        tablinks = document.getElementsByClassName("tab-btn");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove("text-red-600", "border-red-600");
+            tablinks[i].classList.add("text-gray-500", "border-transparent");
+        }
+        const target = document.getElementById(tabName);
+        if (target) {
+            target.classList.remove("hidden");
+            target.classList.add("block");
+        }
+        evt.currentTarget.classList.add("text-red-600", "border-red-600");
+        evt.currentTarget.classList.remove("text-gray-500", "border-transparent");
+    }
+
+    // Default Tab Active
+    document.addEventListener("DOMContentLoaded", () => {
+        const firstBtn = document.querySelector(".tab-btn");
+        if (firstBtn) firstBtn.click();
+    });
+</script>
+

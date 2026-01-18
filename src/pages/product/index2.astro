@@ -1,0 +1,111 @@
+---
+import PublicLayout from "../../layouts/PublicLayout.astro";
+
+// --- BAGIAN 1: LOGIC (Punya Kamu) ---
+
+// 1. Ambil ID dari URL dan bersihkan
+const rawId = Astro.url.searchParams.get("id");
+const id = rawId ? rawId.toString() : "1";
+
+// 2. Data Dummy Lengkap
+const dummyProducts = [
+    {
+        id: "1",
+        name: "Laptop Gaming Asus",
+        price: 15000000,
+        stock: 5,
+        description: "Laptop gaming spek tinggi rata kanan. Cocok untuk render video dan game AAA.",
+        category_id: 1,
+        image: "https://placehold.co/400x400?text=Laptop+Gaming",
+    },
+    {
+        id: "2",
+        name: "Mouse Wireless Logitech",
+        price: 250000,
+        stock: 20,
+        description: "Mouse silent click, baterai awet hingga 12 bulan. Koneksi stabil tanpa delay.",
+        category_id: 2,
+        image: "https://placehold.co/400x400?text=Mouse+Wireless",
+    },
+    {
+        id: "3",
+        name: "Keyboard Mechanical",
+        price: 750000,
+        stock: 12,
+        description: "Blue switch, RGB backlight dengan 10 mode warna. Tahan hingga 50 juta klik.",
+        category_id: 2,
+        image: "https://placehold.co/400x400?text=Keyboard",
+    },
+];
+
+// 3. Pencarian Produk
+let product = dummyProducts.find((p) => String(p.id) === String(id));
+
+// 4. Fallback
+if (!product) {
+    console.log(`Produk dengan ID ${id} tidak ditemukan! Menampilkan default.`);
+    product = dummyProducts[0];
+}
+
+// 5. Helper Format Rupiah (Tambahan untuk Tampilan)
+const formatRupiah = (num:number) => "Rp " + num.toLocaleString('id-ID');
+---
+
+<PublicLayout title={product.name}>
+    
+    <div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        
+        <div class="max-w-5xl w-full bg-white rounded-[30px] shadow-xl overflow-hidden flex flex-col md:flex-row">
+            
+            <div class="md:w-1/2 bg-gray-100 relative min-h-[400px] flex items-center justify-center p-8">
+                <img 
+                    src={product.image} 
+                    alt={product.name} 
+                    class="w-full h-auto object-contain rounded-xl shadow-sm hover:scale-105 transition duration-500"
+                />
+            </div>
+
+            <div class="md:w-1/2 p-10 flex flex-col justify-center">
+                
+                <div class="mb-4">
+                    <p class="text-[10px] text-gray-400 border border-gray-200 rounded px-2 py-1 w-fit mb-2">
+                        Debug Info: URL ID = {id} | Product ID = {product.id}
+                    </p>
+                    <span class="text-blue-600 font-bold tracking-wider text-sm uppercase">
+                        KATEGORI ID: {product.category_id}
+                    </span>
+                </div>
+
+                <h1 class="text-4xl font-black text-gray-900 mb-4 leading-tight">
+                    {product.name}
+                </h1>
+
+                <p class="text-gray-500 text-lg mb-8 leading-relaxed">
+                    {product.description}
+                </p>
+
+                <div class="flex items-center gap-4 mb-8">
+                    <span class="text-4xl font-black text-green-600 tracking-tight">
+                        {formatRupiah(product.price)}
+                    </span>
+                    <span class="text-sm text-gray-400 font-medium bg-gray-100 px-3 py-1 rounded-full">
+                        Stok: {product.stock}
+                    </span>
+                </div>
+
+                <div class="flex flex-col gap-4">
+                    <button class="w-full bg-[#1d4ed8] hover:bg-blue-800 text-white font-bold py-4 rounded-2xl shadow-lg transition transform hover:scale-[1.02] text-lg flex justify-center items-center gap-2" onclick="alert('Berhasil masuk keranjang!')">
+                        <span>+</span> Masukkan Keranjang
+                    </button>
+                    
+                    <a href="/" class="text-center text-gray-400 hover:text-gray-800 transition font-medium mt-2">
+                        Kembali ke Menu
+                    </a>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+</PublicLayout>

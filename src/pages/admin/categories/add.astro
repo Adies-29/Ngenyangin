@@ -1,0 +1,104 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+
+// Variabel untuk menampung pesan error & data lama (agar tidak hilang saat reload)
+let errorMessage = "";
+let oldData = { id: "", name: "" };
+
+// --- LOGIKA SERVER ACTION ---
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const id = formData.get("id")?.toString() || "";
+        const name = formData.get("name")?.toString() || "";
+
+        // Simpan input user, jaga-jaga kalau error nanti bisa ditampilkan lagi
+        oldData = { id, name };
+
+        // Kirim request dari Server Astro ke Backend API
+        const response = await fetch("http://localhost:3000/api/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                category_id: id,  // Mapping: form 'id' -> backend 'category_id'
+                category: name    // Mapping: form 'name' -> backend 'category'
+            }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Jika sukses, langsung redirect ke halaman list
+            return Astro.redirect("/admin/categories");
+        } else {
+            // Jika gagal, tangkap pesan error dari backend
+            errorMessage = result.message || "Gagal menambahkan kategori.";
+        }
+
+    } catch (error) {
+        console.error(error);
+        errorMessage = "Terjadi kesalahan koneksi ke server backend.";
+    }
+}
+---
+
+<AdminLayout title="Tambah Kategori">
+    <div class="max-w-2xl mx-auto bg-white rounded-3xl shadow-lg p-8 border border-gray-100">
+        
+        <div class="mb-8 flex justify-between items-center border-b border-gray-100 pb-4">
+            <div>
+                <h1 class="text-2xl font-black text-gray-800">Tambah Kategori</h1>
+                <p class="text-gray-500 text-sm">Buat kategori baru (Pastikan ID unik).</p>
+            </div>
+            <a href="/admin/categories" class="text-gray-400 hover:text-gray-800 font-bold text-sm transition flex items-center gap-1">
+                &larr; Batal
+            </a>
+        </div>
+
+        {errorMessage && (
+            <div class="mb-6 p-4 rounded-xl bg-red-50 text-red-600 border border-red-200 font-medium flex items-center gap-2">
+                ⚠️ <span>{errorMessage}</span>
+            </div>
+        )}
+
+        <form method="POST" class="space-y-6">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="space-y-2">
+                    <label class="block text-gray-700 font-bold text-sm ml-1">Kode ID</label>
+                    <input 
+                        type="text" 
+                        name="id" 
+                        required 
+                        maxlength="2"
+                        placeholder="Cth: KD"
+                        value={oldData.id} 
+                        class="w-full px-5 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-yellow-100 focus:border-yellow-400 outline-none transition font-black text-gray-700 uppercase" 
+                        oninput="this.value = this.value.toUpperCase()" 
+                    />
+                    <p class="text-xs text-gray-400 ml-1">Maksimal 2 huruf (Unik)</p>
+                </div>
+
+                <div class="space-y-2 md:col-span-2">
+                    <label class="block text-gray-700 font-bold text-sm ml-1">Nama Kategori</label>
+                    <input 
+                        type="text" 
+                        name="name" 
+                        required 
+                        placeholder="Contoh: Kendaraan"
+                        value={oldData.name}
+                        class="w-full px-5 py-3 border border-gray-200 rounded-xl focus:ring-4 focus:ring-yellow-100 focus:border-yellow-400 outline-none transition font-medium text-gray-700" 
+                    />
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <button type="submit"
+                    class="w-full bg-[#FEB516] hover:bg-yellow-500 text-yellow-900 font-black py-4 rounded-xl shadow-lg shadow-yellow-200 transition transform hover:-translate-y-1 active:scale-95 text-lg">
+                    + Simpan Kategori Baru
+                </button>
+            </div>
+        </form>
+
+    </div>
+</AdminLayout>

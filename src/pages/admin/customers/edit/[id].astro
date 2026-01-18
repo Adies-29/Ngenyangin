@@ -1,0 +1,118 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+
+const { id } = Astro.params;
+let customer: any = {};
+
+// 1. Ambil Data Lama
+try {
+    const res = await fetch(`http://localhost:3000/api/customers/${id}`);
+    if (res.ok) {
+        customer = await res.json();
+    } else {
+        // Dummy Data
+        customer = {
+            id: id,
+            name: "Customer Demo",
+            email: "demo@mail.com",
+            phone: "0812345678",
+            address: "Alamat Palsu",
+        };
+    }
+} catch (e) {
+    customer = {
+        id: id,
+        name: "Dummy User",
+        email: "dummy@mail.com",
+        phone: "0800000000",
+        address: "Server Mati",
+    };
+}
+
+// 2. Handle Update
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        const data = {
+            name: formData.get("name"),
+            email: formData.get("email"),
+            phone: formData.get("phone"),
+            address: formData.get("address"),
+        };
+
+        await fetch(`http://localhost:3000/api/customers/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+
+        return Astro.redirect("/admin/customers");
+    } catch (error) {
+        return Astro.redirect("/admin/customers");
+    }
+}
+---
+
+<AdminLayout title="Edit Pelanggan">
+    <div class="max-w-2xl bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Pelanggan</h2>
+
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">
+                    Nama Lengkap</label>
+                <input
+                    type="text"
+                    name="name"
+                    value={customer.name}
+                    required
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-yellow-300"/>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2"
+                        >Email</label>
+                    <input
+                        type="email"
+                        name="email"
+                        value={customer.email}
+                        required
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-yellow-300"/>
+                </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        No. HP</label >
+                    <input
+                        type="text"
+                        name="phone"
+                        value={customer.phone}
+                        required
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-yellow-300"/>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">
+                    Alamat</label>
+                <textarea
+                    name="address"
+                    rows="3"
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-yellow-300">{customer.address}</textarea>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-4">
+                <a
+                    href="/admin/customers"
+                    class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    Batal
+                </a>
+                <button
+                    type="submit"
+                    class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                    Update
+                </button>
+            </div>
+        </form>
+    </div>
+</AdminLayout>

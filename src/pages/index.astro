@@ -1,0 +1,180 @@
+---
+// src/pages/index.astro
+import "../style/global.css";
+import PublicLayout from "../layouts/PublicLayout.astro";
+import ProductCard from "../components/ProductCard.astro";
+
+// 1. FUNGSI PEMBANTU (MAPPING)
+// Kita pisahkan logika "translasi" data di sini supaya kodingan utama bersih.
+const mapDatabaseToFrontend = (p:any) => ({
+    id: p.PRODUCT_ID,
+    name: p.PRODUCT_NAME,
+    price: p.PRICE,
+    stock: p.STOCK,
+    category: p.CATEGORY_ID,
+    image: p.IMAGE || "https://placehold.co/400x600?text=No+Image"
+});
+
+let products : any[] = [];
+// 2. FETCH DATA (ONE-LINER STYLE)
+try {
+    const res = await fetch('http://localhost:3000/api/products');
+    const data = await res.json();
+    
+    // 3. SMART EXTRACTION (Operator ||)
+    // "Ambil data.data, kalau gak ada, ambil data langsung, kalau gak ada, kasih array kosong"
+    const rawItems = data.data || data || []; 
+
+    // 4. JALANKAN MAPPING
+    // Pastikan rawItems itu Array sebelum di-map supaya tidak error
+    if (Array.isArray(rawItems)) {
+        products = rawItems.map(mapDatabaseToFrontend);
+    }
+
+} catch (e) {
+    console.log("Backend error/offline");
+}
+
+const formatRupiah = (num:number) => "Rp." + num.toLocaleString('id-ID');
+---
+
+<PublicLayout title="Beranda">
+	<section id="home" class="relative h-[90vh] flex items-center overflow-hidden">
+		<div class="absolute inset-0 z-0">
+			<img
+				src="https://i.ibb.co.com/zVgQdrvb/8d7d7abc88be81941a453b0f2825300062d41cf4.jpg"
+				alt="Background Food"
+				class="w-full h-full object-cover"
+			/>
+			<div
+				class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"
+			>
+			</div>
+		</div>
+
+		<div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
+			<div class="max-w-2xl">
+				<h1
+					class="text-white text-6xl md:text-7xl font-extrabold leading-tight"
+				>
+					Nikmati Lezatnya<br />
+					<span class="text-[#FFC107]">Hidangan<br />Nusantara</span>
+				</h1>
+
+				<p
+					class="text-gray-200 text-lg md:text-xl mt-8 leading-relaxed max-w-lg"
+				>
+					Rendang bukan sekadar makanan, tapi momen happy yang bikin
+					makan lebih hidup, dan selalu pengin nambah lagi.
+				</p>
+
+				<div class="mt-10">
+					<a
+						href="#menu"
+						class="bg-[#FFC107] hover:bg-yellow-500 text-red-900 px-10 py-4 rounded-2xl font-extrabold text-lg shadow-xl transition transform hover:scale-105 inline-block"
+					>
+						Beli Sekarang
+					</a>
+				</div>
+			</div>
+		</div>
+	</section>
+
+
+	<section id="menu" class="py-8 bg-gradient-to-b from-[#D4A373] to-[#FDFBF7]">
+		<div class="max-w-7xl mx-auto px-4 text-center">
+			<h2 class="text-3xl font-extrabold text-white mb-8">
+				Menu Makanan Favorit
+			</h2>
+
+			<!-- WRAPPER -->
+			<div
+				id="slider"
+				class="relative flex justify-center items-center gap-8 overflow-hidden"
+			>
+				<!-- CARD KIRI -->
+				<div
+					id="leftCard"
+					class="hidden md:block w-[240px] h-[300px] rounded-2xl overflow-hidden opacity-50 blur-sm transition-all duration-500 ease-in-out"
+				>
+					<img
+						src="https://images.unsplash.com/photo-1490818387583-1baba5e638af"
+						class="w-full h-full object-cover"
+					/>
+				</div>
+
+				<!-- CARD UTAMA -->
+				<div
+					id="mainCard"
+					class="relative w-full max-w-[600px] h-[360px] rounded-3xl overflow-hidden shadow-2xl z-10 transition-all duration-500 ease-in-out"
+				>
+					<img
+						src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd"
+						class="w-full h-full object-cover"
+					/>
+
+					<!-- OVERLAY -->
+					<div
+						class="absolute inset-0 bg-black/40 flex flex-col justify-center items-start p-10 text-left">
+						<h3
+							class="text-white text-4xl font-black leading-tight">
+							Burger<br />Ngenyangin
+						</h3>
+						<a
+							href="#"
+							class="mt-6 bg-[#FFC107] text-red-900 px-6 py-2 rounded-full font-bold text-sm hover:scale-105 transition">
+							Beli Sekarang
+						</a>
+					</div>
+				</div>
+
+				<!-- CARD KANAN -->
+				<div
+					id="rightCard"
+					class="hidden md:block w-[260px] h-[320px] rounded-2xl overflow-hidden opacity-50 blur-sm transition-all duration-500 ease-in-out">
+					<img
+						src="https://images.unsplash.com/photo-1544025162-d76694265947"
+						class="w-full h-full object-cover"/>
+				</div>
+			</div>
+
+			<!-- BUTTON -->
+			<div class="mt-10 mb-5">
+				<a
+					href="/menu"
+					class="bg-[#C81E1E] text-white px-10 py-3 rounded-full font-bold text-lg shadow-xl hover:bg-red-700 transition">
+					Lihat Semua
+				</a>
+			</div>
+		</div>
+	</section>
+
+	<section id="kategori" class="py-20 bg-[#FDFBF7]">
+        <div class="max-w-7xl mx-auto px-6">
+            
+            <div id="produk" class="mb-12 text-center">
+                <h2 class="text-4xl font-black text-[#3D2C2A] tracking-wide">
+                    Daftar Produk
+                </h2>
+                <div class="h-1 w-24 bg-[#FFC107] mx-auto mt-4 rounded-full"></div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                
+                {products.length > 0 ? (
+                    products.map((p) => <ProductCard product={p} />)
+                ) : (
+                    <div class="col-span-full text-center py-10">
+                        <p class="text-gray-500 font-bold">Gagal memuat data (Cek Backend)</p>
+                    </div>
+                )}
+
+            </div>
+
+        </div>
+    </section>
+</PublicLayout>
+
+<script src="/src/scripts/searchMenu.js"></script>
+
+

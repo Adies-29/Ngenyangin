@@ -1,0 +1,221 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+
+const { id } = Astro.params;
+
+if (!id) {
+    return Astro.redirect("/admin/products");
+}
+
+let product = null;
+let categories = [];
+let errorMessage = "";
+let successMessage = "";
+
+// --- 1. AMBIL DATA KATEGORI (Untuk Dropdown) ---
+try {
+    const resCat = await fetch("http://localhost:3000/api/categories");
+    const dataCat = await resCat.json();
+    const rawCategories = dataCat.data || dataCat || [];
+
+    categories = rawCategories.map((c: any) => ({
+        id: c.CATEGORY_ID || c.category_id || c.id,
+        name: c.CATEGORY || c.category_name || c.name || "Tanpa Nama",
+    }));
+} catch (e) {
+    console.error("Gagal load kategori:", e);
+}
+
+// --- 2. AMBIL DATA PRODUK LAMA (GET) ---
+try {
+    const resProd = await fetch(`http://localhost:3000/api/products/${id}`);
+    const dataProd = await resProd.json();
+    const rawData = dataProd.data || dataProd;
+    const p = Array.isArray(rawData) ? rawData[0] : rawData;
+
+    if (!p) throw new Error("Produk tidak ditemukan");
+
+    // Mapping Data Awal
+    product = {
+        id: p.PRODUCT_ID,
+        name: p.PRODUCT_NAME,
+        price: p.PRICE,
+        stock: p.STOCK,
+        categoryId: p.CATEGORY_ID,
+        description: p.DESCRIPTION,
+    };
+
+} catch (e) {
+    errorMessage = "Gagal memuat data produk.";
+}
+
+// --- 3. SERVER ACTION: UPDATE PRODUK (POST -> PUT) ---
+if (Astro.request.method === "POST") {
+    try {
+        const formData = await Astro.request.formData();
+        
+        // Ambil data dari form
+        const name = formData.get("name");
+        const price = formData.get("price");
+        const stock = formData.get("stock");
+        const category_id = formData.get("category_id");
+        const description = formData.get("description");
+
+        // Siapkan Payload JSON untuk Backend
+        // Struktur JSON disamakan dengan script lama kamu
+        const payload = {
+            product_name: name,
+            price: price,
+            stock: stock,
+            category_id: category_id,
+            updated_by: "Admin",    // Hardcode sesuai logic lama
+            description: description,
+            image: "no-image.jpg"   // Default handling
+        };
+
+        // Kirim PUT ke Backend API
+        const response = await fetch(`http://localhost:3000/api/products/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Sukses? Redirect ke list produk
+            return Astro.redirect("/admin/products");
+        } else {
+            errorMessage = result.message || "Gagal mengupdate produk.";
+            
+            // Opsional: Update variabel 'product' dengan input user 
+            // supaya data yang diketik tidak hilang saat error muncul
+            product = { 
+                ...product, 
+                name, price, stock, categoryId: category_id, description 
+            };
+        }
+
+    } catch (error) {
+        console.error(error);
+        errorMessage = "Terjadi kesalahan koneksi ke server.";
+    }
+}
+---
+
+<AdminLayout title="Edit Produk">
+    <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg p-8">
+        <div class="mb-6 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">Edit Produk</h1>
+            <a
+                href="/admin/products"
+                class="text-gray-500 hover:text-gray-800 text-sm font-bold"
+            >
+                &larr; Batal
+            </a>
+        </div>
+
+        {errorMessage && (
+            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-6 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                {errorMessage}
+            </div>
+        )}
+
+        {product ? (
+            <form method="POST" class="space-y-6">
+                <div class="space-y-2">
+                    <label class="block text-gray-800 font-semibold text-sm">
+                        Nama Produk
+                    </label>
+                    <input
+                        type="text"
+                        name="name"
+                        required
+                        value={product.name}
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                    />
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-2">
+                        <label class="block text-gray-800 font-semibold text-sm">
+                            Harga (Rp)
+                        </label>
+                        <input
+                            type="number"
+                            name="price"
+                            required
+                            value={product.price}
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-gray-800 font-semibold text-sm">
+                            Stok
+                        </label>
+                        <input
+                            type="number"
+                            name="stock"
+                            required
+                            value={product.stock}
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-gray-800 font-semibold text-sm">
+                        Kategori
+                    </label>
+                    <div class="relative">
+                        <select
+                            name="category_id"
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-yellow-400 focus:outline-none appearance-none"
+                        >
+                            <option value="">-- Pilih Kategori --</option>
+                            {categories.map((cat: any) => (
+                                <option
+                                    value={cat.id}
+                                    selected={String(cat.id) === String(product.categoryId)}
+                                >
+                                    {cat.name}
+                                </option>
+                            ))}
+                        </select>
+                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-gray-800 font-semibold text-sm">
+                        Deskripsi
+                    </label>
+                    <textarea
+                        name="description"
+                        rows="4"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                    >{product.description}</textarea>
+                </div>
+
+                <div class="flex justify-end pt-6 border-t border-gray-100">
+                    <button
+                        type="submit"
+                        class="w-full bg-[#FEB516] hover:bg-yellow-500 text-yellow-900 font-black py-4 rounded-xl shadow-lg shadow-yellow-200 transition transform hover:-translate-y-1 active:scale-95 text-lg"
+                    >
+                        💾 Simpan Perubahan
+                    </button>
+                </div>
+            </form>
+        ) : (
+            <div class="text-center py-10 text-gray-500">
+                Loading data... Jika lama, berarti ID tidak ditemukan.
+            </div>
+        )}
+    </div>
+</AdminLayout>

@@ -1,0 +1,280 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+
+// --- 1. FETCH DATA DARI BACKEND ---
+let transactions: any[] = []; 
+let totalPenghasilan = 0;
+let totalPengunjung = 0;
+
+try {
+    // Sesuaikan port backend kamu
+    const res = await fetch('http://localhost:3000/api/transactions'); 
+    const data = await res.json();
+    
+    // Pastikan data berupa array
+    const rawData = data.data || data || [];
+
+    // Mapping Data Database ke Format Tampilan Kamu
+    transactions = rawData.map((t: any, index: number) => ({
+        no: index + 1,
+        id: t.ORDER_ID, // Sesuaikan nama kolom DB
+        customer: t.CUST_NAME || "Non-Member",
+        date: t.ORDER_DATE,
+        gateway: t.PAYMENT_METHOD || "Tunai",
+        total: t.TOTAL,
+        // Kita simpan receipt number buat jaga-jaga
+        receipt: t.RECEIPT_NUMBER
+    }));
+
+    // --- 2. HITUNG TOTAL UNTUK SIDEBAR KANAN ---
+    totalPengunjung = transactions.length;
+    totalPenghasilan = transactions.reduce((acc, curr) => acc + Number(curr.total), 0);
+
+} catch (e) {
+    console.error("Gagal fetch transaksi:", e);
+}
+
+// Helper: Format Rupiah (Server Side)
+const formatRupiah = (number: any) => {
+    return new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 0
+    }).format(number);
+}
+
+// Helper: Format Tanggal (Server Side)
+const formatDate = (dateString: any) => {
+    const options: any = { day: 'numeric', month: 'short', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('id-ID', options);
+}
+---
+
+<AdminLayout title="Transaksi">
+  <h2 class="text-3xl font-bold mb-6">Transaksi</h2>
+
+  <div class="flex flex-col xl:flex-row gap-6">
+    <div class="flex-1 space-y-6">
+      <div class="bg-white rounded-2xl p-6 shadow border">
+        <h3 class="font-bold text-lg mb-4">Transaksi Customers</h3>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-100 text-gray-600">
+              <tr>
+                <th class="py-3 px-4 text-left">No</th>
+                <th class="py-3 px-4 text-left">ID_Transaksi</th>
+                <th class="py-3 px-4 text-left">Customer</th>
+                <th class="py-3 px-4 text-left">Date</th>
+                <th class="py-3 px-4 text-center">P Gateway</th>
+                <th class="py-3 px-4 text-right">Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {
+                transactions.map((trx) => (
+                  <tr
+                    class="border-b hover:bg-gray-50 cursor-pointer transition"
+                    onclick={`showDetail('${trx.id}', '${JSON.stringify(trx).replace(/"/g, '&quot;')}')`}
+                  >
+                    <td class="py-4 px-4 text-gray-500">{trx.no}.</td>
+
+                    <td class="py-4 px-4 font-bold text-red-600">#{trx.id}</td>
+
+                    <td class="py-4 px-4 font-medium">{trx.customer}</td>
+
+                    <td class="py-4 px-4 text-xs text-gray-500">{formatDate(trx.date)}</td>
+
+                    <td class="py-4 px-4 text-center">
+                      <span class={`px-3 py-1 rounded-full text-xs font-bold ${trx.gateway === 'Tunai' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {trx.gateway}
+                      </span>
+                    </td>
+
+                    <td class="py-4 px-4 text-right font-semibold text-gray-800">
+                      {formatRupiah(trx.total)}
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-xs text-gray-400 mt-4 italic text-center">
+          *Klik salah satu transaksi untuk melihat detail
+        </p>
+      </div>
+
+      <div
+        id="detail-card"
+        class="bg-white rounded-2xl p-6 shadow border hidden animate-fade"
+      >
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="font-bold text-lg">Detail Transaksi</h3>
+            <button onclick="closeDetail()" class="text-gray-400 hover:text-red-500 text-sm font-bold">✕ Tutup</button>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-8">
+          <div class="w-full md:w-1/3 space-y-4 text-sm">
+            <div>
+              <p class="text-gray-400">ID Transaksi</p>
+              <p id="d-id" class="font-bold text-red-600">-</p>
+            </div>
+
+            <div>
+              <p class="text-gray-400">Date</p>
+              <p id="d-date" class="font-semibold">-</p>
+            </div>
+
+            <div>
+              <p class="text-gray-400">Status</p>
+              <span
+                id="d-status"
+                class="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold"
+                >PAID</span
+              >
+            </div>
+
+            <div>
+              <p class="text-gray-400">Pembayaran</p>
+              <p id="d-gateway" class="font-semibold">-</p>
+            </div>
+
+            <div>
+              <p class="text-gray-400">Nama</p>
+              <p id="d-customer" class="font-bold text-lg">-</p>
+            </div>
+          </div>
+
+          <div class="w-full md:w-2/3">
+            <div class="border-l-4 border-yellow-400 pl-3 mb-4">
+              <h4 class="font-bold">Item</h4>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-4">
+              <table class="w-full text-sm">
+                <thead class="border-b text-gray-500">
+                  <tr>
+                    <th class="text-left pb-2">ITEM</th>
+                    <th class="text-left pb-2">HARGA</th>
+                    <th class="text-center pb-2">QTY</th>
+                    <th class="text-right pb-2">SUBTOTAL</th>
+                  </tr>
+                </thead>
+
+                <tbody id="d-items-body">
+                    <tr><td colspan="4" class="text-center py-4 text-gray-400">Memuat item...</td></tr>
+                </tbody>
+
+                <tfoot>
+                  <tr class="border-t">
+                    <td colspan="3" class="pt-4 font-bold text-gray-600">
+                      Total Pembayaran
+                    </td>
+                    <td id="d-total" class="pt-4 text-right font-bold text-lg text-gray-800">Rp.0</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-full xl:w-80 space-y-6">
+      <div class="bg-white rounded-2xl p-6 shadow border text-center">
+        <h4 class="font-bold text-lg mb-4">Penghasilan</h4>
+        <div class="bg-red-600 rounded-xl py-6 shadow-lg shadow-red-200">
+          <span class="text-yellow-300 text-3xl font-extrabold italic block">
+            {formatRupiah(totalPenghasilan)}
+          </span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 shadow border text-center">
+        <h4 class="font-bold text-lg mb-4">Total Pengunjung</h4>
+        <div class="bg-red-600 rounded-xl py-8 shadow-lg shadow-red-200">
+          <span class="text-yellow-300 text-5xl font-extrabold italic block">
+            {totalPengunjung}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+    // Format Rupiah di Client Side
+    const formatRupiahJS = (angka) => {
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            minimumFractionDigits: 0
+        }).format(angka);
+    };
+
+    // Format Tanggal di Client Side
+    const formatDateJS = (str) => {
+        return new Date(str).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    async function showDetail(id, jsonString) {
+        // 1. Parsing Data Baris yang diklik
+        const trx = JSON.parse(jsonString);
+        const card = document.getElementById('detail-card');
+        const tbody = document.getElementById('d-items-body');
+
+        // 2. Tampilkan Card (Hapus class hidden)
+        card.classList.remove('hidden');
+        
+        // Scroll ke card biar kelihatan (opsional, enak buat UX)
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // 3. Isi Data Header (Kiri)
+        document.getElementById('d-id').innerText = "#" + trx.id;
+        document.getElementById('d-date').innerText = formatDateJS(trx.date);
+        document.getElementById('d-gateway').innerText = trx.gateway;
+        document.getElementById('d-customer').innerText = trx.customer;
+        document.getElementById('d-total').innerText = formatRupiahJS(trx.total);
+
+        // 4. Fetch Item Detail dari Database
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400">⏳ Sedang mengambil data produk...</td></tr>`;
+
+        try {
+            const res = await fetch(`http://localhost:3000/api/transactions/${id}`);
+            const items = await res.json();
+
+            tbody.innerHTML = ""; // Bersihkan loading
+
+            if(items.length === 0) {
+                 tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4">Tidak ada item.</td></tr>`;
+                 return;
+            }
+
+            // Loop items dan masukkan ke tabel
+            let html = "";
+            items.forEach(item => {
+                const subtotal = item.SUBTOTAL || (item.PRICE * item.QUANTITY);
+                html += `
+                    <tr>
+                        <td class="pt-3 pb-1 font-medium text-gray-700">${item.PRODUCT_NAME}</td>
+                        <td class="pt-3 pb-1 text-gray-500">${formatRupiahJS(item.PRICE)}</td>
+                        <td class="pt-3 pb-1 text-center font-bold">x${item.QUANTITY}</td>
+                        <td class="pt-3 pb-1 text-right font-bold text-gray-800">${formatRupiahJS(subtotal)}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-red-500">Gagal memuat item.</td></tr>`;
+        }
+    }
+
+    function closeDetail() {
+        document.getElementById('detail-card').classList.add('hidden');
+    }
+</script>
