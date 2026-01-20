@@ -1,105 +1,352 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import TabelLaporan from "../../components/TabelLaporan.astro"; 
 
-// --- 1. LOGIKA AMBIL DATA (BACKEND) ---
-let products : any[] = [];
+// --- 1. FETCH DATA ---
+// A. Variabel Statistik Atas
 let totalProducts = 0;
-let totalCategories = 0; // Nanti kita hitung otomatis
+let totalCategories = 0;
 let totalStock = 0;
+let totalTransactions = 0;
+let totalRevenue = 0;
 
-// Helper Format Rupiah
-const formatRupiah = (num:number) => "Rp " + num.toLocaleString('id-ID');
+// B. Variable Top
+let bestProduct = null;
+let topCustOrder = null;
+let topCustValue = null;
+let topCustItem = null;
+let top10Products = [];
+
+
+// C. Variabel Tabel Laporan
+let dataProfit = [], dataPenjualan = [], dataOrder = [], dataNominal = [], dataKasir = [];
+let errorMessage = "";
+
+
+
+// Helper Format
+const formatRupiah = (num:Number) => "Rp " + Number(num).toLocaleString('id-ID');
 
 try {
-    const res = await fetch('http://localhost:3000/api/products');
-    const data = await res.json();
-    const rawItems = data.data || data || [];
+    const [resProducts, resTransactions, resBestProd, resTopCustOrder, resTopCustValue, resTopCustItem, resTop10, resProfit, resPnejualan, resOrder, resNominal, resKasir] = await Promise.all([
+        fetch('http://localhost:3000/api/products'),
+        fetch('http://localhost:3000/api/transactions'),
 
-    // Mapping Data (Database Huruf Besar -> Frontend Huruf Kecil)
+        fetch('http://localhost:3000/api/orders/best-product/last-year'),
+        fetch('http://localhost:3000/api/orders/top-customers/last-year'),
+        fetch('http://localhost:3000/api/orders/top-order-value/last-year'),
+        fetch('http://localhost:3000/api/orders/top-item-buyers/last-year'),
+        fetch('http://localhost:3000/api/orders/top-10-products/last-year'),
+
+        fetch('http://localhost:3000/api/profit-bulanan-produk'),
+        fetch('http://localhost:3000/api/penjualan-bulanan-produk'),
+        fetch('http://localhost:3000/api/order-bulanan-customer'),
+        fetch('http://localhost:3000/api/nominal-order-customer'),
+        fetch('http://localhost:3000/api/layanan-bulanan-kasir')
+    ]);
+
+    // A. Statistik
+    const productData = await resProducts.json();
+    const rawItems = productData.data || productData || [];
     if (Array.isArray(rawItems)) {
-        products = rawItems.map((item) => ({
-            id: item.PRODUCT_ID,
-            name: item.PRODUCT_NAME,
-            price: item.PRICE,
-            stock: item.STOCK,
-            category: item.CATEGORY_ID,
-            image: item.IMAGE || "https://placehold.co/100x100?text=No+Img"
-        }));
-
-        // --- 2. HITUNG STATISTIK OTOMATIS ---
-        totalProducts = products.length; // Jumlah semua produk
-        
-        // Hitung Kategori Unik (Misal: MK, MN -> berarti ada 2 kategori)
-        const uniqueCategories = new Set(products.map(p => p.category));
+        totalProducts = rawItems.length;
+        const uniqueCategories = new Set(rawItems.map(item => item.CATEGORY_ID));
         totalCategories = uniqueCategories.size;
+        totalStock = rawItems.reduce((acc, curr) => acc + Number(curr.STOCK), 0);
+    }
+    
+    const trxData = await resTransactions.json();
+    const rawTrx = trxData.data || trxData || [];
+    if (Array.isArray(rawTrx)){
 
-        // Hitung Total Stok
-        totalStock = products.reduce((acc, curr) => acc + curr.stock, 0);
+        totalTransactions = rawTrx.length;
+        totalRevenue = rawTrx.reduce((acc, curr) => acc + Number(curr.TOTAL), 0);
     }
 
+
+    if (resBestProd.ok) bestProduct = await resBestProd.json();
+    
+    if (resTopCustOrder.ok) {
+        const d = await resTopCustOrder.json();
+        topCustOrder = Array.isArray(d) ? d[0] : null;
+    }
+    if (resTopCustValue.ok) {
+        const d = await resTopCustValue.json();
+        topCustValue = Array.isArray(d) ? d[0] : null;
+    }
+    if (resTopCustItem.ok) {
+        const d = await resTopCustItem.json();
+        topCustItem = Array.isArray(d) ? d[0] : null;
+    }
+    if (resTop10.ok) top10Products = await resTop10.json();
+
+
+
+
+    // C. Laporan Bulanan
+    if(resProfit.ok) dataProfit = await resProfit.json();
+    if(resPnejualan.ok) dataPenjualan = await resPnejualan.json();
+    if(resOrder.ok) dataOrder = await resOrder.json();
+    if(resNominal.ok) dataNominal = await resNominal.json();
+    if(resKasir.ok) dataKasir = await resKasir.json();
+
 } catch (e) {
-    console.log("Error fetch dashboard:", e);
+    console.error("Error Dashboard:", e);
+    errorMessage = "Gagal memuat data dashboard.";
 }
 ---
 
 <AdminLayout title="Dashboard">
     
+    {/* --- BAGIAN 1: KARTU STATISTIK (TETAP SAMA) --- */}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        
-        <div class="bg-white rounded-3xl p-8 shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col items-center text-center">
-            <div class="mb-3 text-5xl">
-                <svg width="58" height="60" viewBox="0 0 58 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M23.2 44.6455V26.5158L3.86667 16.8627V43.4087L20.3 51.644L19.3635 55.4751L0 45.822V12.5189L25.1333 0L50.2667 12.5189V20.6637C48.8569 20.8849 47.5681 21.3374 46.4 22.0211V16.8627L27.0667 26.5158V40.7843L23.2 44.6455ZM18.9104 7.39065L36.5521 17.4661L44.0135 13.7255L25.1333 4.28356L18.9104 7.39065ZM25.1333 23.1674L32.3833 19.5475L14.7417 9.4721L6.25312 13.7255L25.1333 23.1674ZM51.9583 25.3092C52.8042 25.3092 53.5896 25.46 54.3146 25.7617C55.0396 26.0633 55.684 26.4756 56.2479 26.9985C56.8118 27.5214 57.2347 28.1549 57.5167 28.8989C57.7986 29.643 57.9597 30.4374 58 31.2821C58 32.0664 57.849 32.8306 57.5469 33.5747C57.2448 34.3188 56.8118 34.9723 56.2479 35.5354L34.5885 57.1644L23.2 60L26.0396 48.6275L47.699 27.0287C48.283 26.4454 48.9375 26.0131 49.6625 25.7315C50.3875 25.45 51.1528 25.3092 51.9583 25.3092ZM53.499 32.8205C53.9219 32.3982 54.1333 31.8854 54.1333 31.2821C54.1333 30.6586 53.9319 30.1559 53.5292 29.7738C53.1264 29.3917 52.6028 29.1905 51.9583 29.1704C51.6764 29.1704 51.4045 29.2107 51.1427 29.2911C50.8809 29.3715 50.6493 29.5224 50.4479 29.7436L29.5437 50.6184L28.5167 54.6908L32.5948 53.6652L53.499 32.8205Z" fill="#FEB516"/>
-                </svg>
-            </div>
-            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">
-                Total Produk
-            </div>
+        {/* Card 1: Total Produk */}
+        <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+            <svg width="58" height="60" viewBox="0 0 58 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M23.2 44.6455V26.5158L3.86667 16.8627V43.4087L20.3 51.644L19.3635 55.4751L0 45.822V12.5189L25.1333 0L50.2667 12.5189V20.6637C48.8569 20.8849 47.5681 21.3374 46.4 22.0211V16.8627L27.0667 26.5158V40.7843L23.2 44.6455ZM18.9104 7.39065L36.5521 17.4661L44.0135 13.7255L25.1333 4.28356L18.9104 7.39065ZM25.1333 23.1674L32.3833 19.5475L14.7417 9.4721L6.25312 13.7255L25.1333 23.1674ZM51.9583 25.3092C52.8042 25.3092 53.5896 25.46 54.3146 25.7617C55.0396 26.0633 55.684 26.4756 56.2479 26.9985C56.8118 27.5214 57.2347 28.1549 57.5167 28.8989C57.7986 29.643 57.9597 30.4374 58 31.2821C58 32.0664 57.849 32.8306 57.5469 33.5747C57.2448 34.3188 56.8118 34.9723 56.2479 35.5354L34.5885 57.1644L23.2 60L26.0396 48.6275L47.699 27.0287C48.283 26.4454 48.9375 26.0131 49.6625 25.7315C50.3875 25.45 51.1528 25.3092 51.9583 25.3092ZM53.499 32.8205C53.9219 32.3982 54.1333 31.8854 54.1333 31.2821C54.1333 30.6586 53.9319 30.1559 53.5292 29.7738C53.1264 29.3917 52.6028 29.1905 51.9583 29.1704C51.6764 29.1704 51.4045 29.2107 51.1427 29.2911C50.8809 29.3715 50.6493 29.5224 50.4479 29.7436L29.5437 50.6184L28.5167 54.6908L32.5948 53.6652L53.499 32.8205Z" fill="#FEB516"/>
+            </svg>
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1 mt-2">Total Produk</div>
             <div class="text-4xl font-black text-[#2D2D2D]">{totalProducts}</div>
         </div>
-
-        <div class="bg-white rounded-3xl p-8 shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col items-center text-center">
-            <div class="mb-3 text-5xl">
-                <svg width="58" height="60" viewBox="0 0 58 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M23.2 44.6455V26.5158L3.86667 16.8627V43.4087L20.3 51.644L19.3635 55.4751L0 45.822V12.5189L25.1333 0L50.2667 12.5189V20.6637C48.8569 20.8849 47.5681 21.3374 46.4 22.0211V16.8627L27.0667 26.5158V40.7843L23.2 44.6455ZM18.9104 7.39065L36.5521 17.4661L44.0135 13.7255L25.1333 4.28356L18.9104 7.39065ZM25.1333 23.1674L32.3833 19.5475L14.7417 9.4721L6.25312 13.7255L25.1333 23.1674ZM51.9583 25.3092C52.8042 25.3092 53.5896 25.46 54.3146 25.7617C55.0396 26.0633 55.684 26.4756 56.2479 26.9985C56.8118 27.5214 57.2347 28.1549 57.5167 28.8989C57.7986 29.643 57.9597 30.4374 58 31.2821C58 32.0664 57.849 32.8306 57.5469 33.5747C57.2448 34.3188 56.8118 34.9723 56.2479 35.5354L34.5885 57.1644L23.2 60L26.0396 48.6275L47.699 27.0287C48.283 26.4454 48.9375 26.0131 49.6625 25.7315C50.3875 25.45 51.1528 25.3092 51.9583 25.3092ZM53.499 32.8205C53.9219 32.3982 54.1333 31.8854 54.1333 31.2821C54.1333 30.6586 53.9319 30.1559 53.5292 29.7738C53.1264 29.3917 52.6028 29.1905 51.9583 29.1704C51.6764 29.1704 51.4045 29.2107 51.1427 29.2911C50.8809 29.3715 50.6493 29.5224 50.4479 29.7436L29.5437 50.6184L28.5167 54.6908L32.5948 53.6652L53.499 32.8205Z" fill="#FEB516"/>
-                </svg>
-            </div>
-            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1" >
-                Total Kategori
-            </div>
+        {/* Card 2: Total Kategori */}
+        <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+            <svg width="58" height="60" viewBox="0 0 58 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M23.2 44.6455V26.5158L3.86667 16.8627V43.4087L20.3 51.644L19.3635 55.4751L0 45.822V12.5189L25.1333 0L50.2667 12.5189V20.6637C48.8569 20.8849 47.5681 21.3374 46.4 22.0211V16.8627L27.0667 26.5158V40.7843L23.2 44.6455ZM18.9104 7.39065L36.5521 17.4661L44.0135 13.7255L25.1333 4.28356L18.9104 7.39065ZM25.1333 23.1674L32.3833 19.5475L14.7417 9.4721L6.25312 13.7255L25.1333 23.1674ZM51.9583 25.3092C52.8042 25.3092 53.5896 25.46 54.3146 25.7617C55.0396 26.0633 55.684 26.4756 56.2479 26.9985C56.8118 27.5214 57.2347 28.1549 57.5167 28.8989C57.7986 29.643 57.9597 30.4374 58 31.2821C58 32.0664 57.849 32.8306 57.5469 33.5747C57.2448 34.3188 56.8118 34.9723 56.2479 35.5354L34.5885 57.1644L23.2 60L26.0396 48.6275L47.699 27.0287C48.283 26.4454 48.9375 26.0131 49.6625 25.7315C50.3875 25.45 51.1528 25.3092 51.9583 25.3092ZM53.499 32.8205C53.9219 32.3982 54.1333 31.8854 54.1333 31.2821C54.1333 30.6586 53.9319 30.1559 53.5292 29.7738C53.1264 29.3917 52.6028 29.1905 51.9583 29.1704C51.6764 29.1704 51.4045 29.2107 51.1427 29.2911C50.8809 29.3715 50.6493 29.5224 50.4479 29.7436L29.5437 50.6184L28.5167 54.6908L32.5948 53.6652L53.499 32.8205Z" fill="#FEB516"/>
+            </svg>
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1 mt-2">Total Kategori</div>
             <div class="text-4xl font-black text-[#2D2D2D]">{totalCategories}</div>
         </div>
+        {/* Card 3: Total Stok */}
+        <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+            <svg width="63" height="56" viewBox="0 0 63 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M54.4091 0H25.7727C23.4943 0 21.3091 0.884998 19.698 2.4603C18.0869 4.03561 17.1818 6.17218 17.1818 8.4V28C17.1818 30.2278 18.0869 32.3644 19.698 33.9397C21.3091 35.515 23.4943 36.4 25.7727 36.4H54.4091C56.6875 36.4 58.8727 35.515 60.4838 33.9397C62.0949 32.3644 63 30.2278 63 28V8.4C63 6.17218 62.0949 4.03561 60.4838 2.4603C58.8727 0.884998 56.6875 0 54.4091 0ZM57.2727 28C57.2727 28.7426 56.971 29.4548 56.434 29.9799C55.897 30.505 55.1686 30.8 54.4091 30.8H25.7727C25.0132 30.8 24.2849 30.505 23.7478 29.9799C23.2108 29.4548 22.9091 28.7426 22.9091 28V8.4C22.9091 7.65739 23.2108 6.9452 23.7478 6.4201C24.2849 5.895 25.0132 5.6 25.7727 5.6H54.4091C55.1686 5.6 55.897 5.895 56.434 6.4201C56.971 6.9452 57.2727 7.65739 57.2727 8.4V28ZM47.25 16.8C46.1904 16.8062 45.1705 17.1951 44.3864 17.892C43.7706 17.3447 43.0055 16.9841 42.1841 16.854C41.3627 16.7239 40.5203 16.8299 39.7593 17.1591C38.9983 17.4883 38.3515 18.0265 37.8975 18.7084C37.4435 19.3902 37.2018 20.1864 37.2018 21C37.2018 21.8136 37.4435 22.6098 37.8975 23.2916C38.3515 23.9735 38.9983 24.5117 39.7593 24.8409C40.5203 25.1701 41.3627 25.2761 42.1841 25.146C43.0055 25.0159 43.7706 24.6553 44.3864 24.108C44.9035 24.5676 45.5275 24.8968 46.2042 25.0672C46.8809 25.2376 47.5899 25.244 48.2698 25.0858C48.9496 24.9277 49.5797 24.6097 50.1054 24.1596C50.6311 23.7094 51.0365 23.1406 51.2866 22.5026C51.5366 21.8646 51.6236 21.1765 51.5401 20.4981C51.4566 19.8197 51.2051 19.1715 50.8074 18.6097C50.4097 18.0479 49.8779 17.5894 49.258 17.274C48.638 16.9587 47.9488 16.796 47.25 16.8ZM42.9545 42C42.1951 42 41.4667 42.295 40.9296 42.8201C40.3926 43.3452 40.0909 44.0574 40.0909 44.8V47.6C40.0909 48.3426 39.7892 49.0548 39.2522 49.5799C38.7151 50.105 37.9868 50.4 37.2273 50.4H8.59091C7.83143 50.4 7.10305 50.105 6.56601 49.5799C6.02898 49.0548 5.72727 48.3426 5.72727 47.6V36.4H8.59091C9.35039 36.4 10.0788 36.105 10.6158 35.5799C11.1528 35.0548 11.4545 34.3426 11.4545 33.6C11.4545 32.8574 11.1528 32.1452 10.6158 31.6201C10.0788 31.095 9.35039 30.8 8.59091 30.8H5.72727V28C5.72727 27.2574 6.02898 26.5452 6.56601 26.0201C7.10305 25.495 7.83143 25.2 8.59091 25.2C9.35039 25.2 10.0788 24.905 10.6158 24.3799C11.1528 23.8548 11.4545 23.1426 11.4545 22.4C11.4545 21.6574 11.1528 20.9452 10.6158 20.4201C10.0788 19.895 9.35039 19.6 8.59091 19.6C6.31246 19.6 4.12733 20.485 2.51622 22.0603C0.905111 23.6356 0 25.7722 0 28V47.6C0 49.8278 0.905111 51.9644 2.51622 53.5397C4.12733 55.115 6.31246 56 8.59091 56H37.2273C39.5057 56 41.6909 55.115 43.302 53.5397C44.9131 51.9644 45.8182 49.8278 45.8182 47.6V44.8C45.8182 44.0574 45.5165 43.3452 44.9794 42.8201C44.4424 42.295 43.714 42 42.9545 42ZM14.3182 44.8H17.1818C17.9413 44.8 18.6697 44.505 19.2067 43.9799C19.7437 43.4548 20.0455 42.7426 20.0455 42C20.0455 41.2574 19.7437 40.5452 19.2067 40.0201C18.6697 39.495 17.9413 39.2 17.1818 39.2H14.3182C13.5587 39.2 12.8303 39.495 12.2933 40.0201C11.7562 40.5452 11.4545 41.2574 11.4545 42C11.4545 42.7426 11.7562 43.4548 12.2933 43.9799C12.8303 44.505 13.5587 44.8 14.3182 44.8Z" fill="#0AC700"/>
+            </svg>
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1 mt-2">Total Transaksi</div>
+            <div class="text-4xl font-black text-[#2D2D2D]">{totalTransactions}</div>
+        </div>
+        {/* Card 4: Revenue */}
+        <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col items-center text-center">
+            <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M56.1689 29.9714V56.5339H3V29.9714H56.1689Z" stroke="#FF6A00" stroke-width="3"/>
+            <path d="M29.5845 37.3618C31.1466 37.3618 32.6448 37.9829 33.7495 39.0874C34.8542 40.1921 35.4751 41.6911 35.4751 43.2534C35.475 44.8156 34.8541 46.3138 33.7495 47.4185C32.6448 48.523 31.1467 49.144 29.5845 49.144C28.0223 49.144 26.5241 48.5231 25.4194 47.4185C24.3148 46.3138 23.694 44.8156 23.6938 43.2534C23.6938 41.6911 24.3147 40.1921 25.4194 39.0874C26.5241 37.9828 28.0223 37.3618 29.5845 37.3618ZM43.5474 15.4214L44.1909 16.3237L45.2417 15.9731L49.3403 14.6069L53.5718 26.98H7.26416L35.6265 4.3208L43.5474 15.4214Z" stroke="#FF6A00" stroke-width="3"/>
+            <path d="M56.1913 28.4804H55.671L50.2816 12.7146L4.02467 28.4804L2.97814 28.4716M1.5 28.4834H2.97814L35.9289 2.16064L44.2567 13.838" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
+            <path d="M36.9753 43.253C36.9753 45.2132 36.1966 47.093 34.8106 48.479C33.4246 49.8651 31.5447 50.6437 29.5846 50.6437C27.6244 50.6437 25.7446 49.8651 24.3585 48.479C22.9725 47.093 22.1938 45.2132 22.1938 43.253C22.1938 41.2929 22.9725 39.413 24.3585 38.027C25.7446 36.641 27.6244 35.8623 29.5846 35.8623C31.5447 35.8623 33.4246 36.641 34.8106 38.027C36.1966 39.413 36.9753 41.2929 36.9753 43.253Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
+            <path d="M57.6694 28.4714V58.0343H1.5V28.4714H57.6694Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
+            <path d="M1.5 28.4714H7.41257C7.41257 30.0395 6.78964 31.5434 5.68082 32.6523C4.572 33.7611 3.06811 34.384 1.5 34.384V28.4714ZM57.6694 28.4714H51.7568C51.7568 30.0395 52.3798 31.5434 53.4886 32.6523C54.5974 33.7611 56.1013 34.384 57.6694 34.384V28.4714ZM1.5 58.0343H7.41848C7.41926 57.2568 7.2667 56.4869 6.96955 55.7685C6.67239 55.05 6.23647 54.3973 5.68673 53.8476C5.137 53.2978 4.48424 52.8619 3.76583 52.5647C3.04741 52.2676 2.27744 52.115 1.5 52.1158V58.0343ZM57.6694 58.0343H51.7568C51.7568 56.4662 52.3798 54.9623 53.4886 53.8535C54.5974 52.7446 56.1013 52.1217 57.6694 52.1217V58.0343Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
+            </svg>
+            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1 mt-2 ">Total Revenue</div>
+            <div class="text-3xl font-black text-[#2D2D2D]">{formatRupiah(totalRevenue)}</div>
+        </div>
+    </div>
 
-        <div class="bg-white rounded-3xl p-8 shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col items-center text-center">
-            <div class="mb-3 text-[#2ECC71] text-5xl">
-                <svg width="63" height="56" viewBox="0 0 63 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M54.4091 0H25.7727C23.4943 0 21.3091 0.884998 19.698 2.4603C18.0869 4.03561 17.1818 6.17218 17.1818 8.4V28C17.1818 30.2278 18.0869 32.3644 19.698 33.9397C21.3091 35.515 23.4943 36.4 25.7727 36.4H54.4091C56.6875 36.4 58.8727 35.515 60.4838 33.9397C62.0949 32.3644 63 30.2278 63 28V8.4C63 6.17218 62.0949 4.03561 60.4838 2.4603C58.8727 0.884998 56.6875 0 54.4091 0ZM57.2727 28C57.2727 28.7426 56.971 29.4548 56.434 29.9799C55.897 30.505 55.1686 30.8 54.4091 30.8H25.7727C25.0132 30.8 24.2849 30.505 23.7478 29.9799C23.2108 29.4548 22.9091 28.7426 22.9091 28V8.4C22.9091 7.65739 23.2108 6.9452 23.7478 6.4201C24.2849 5.895 25.0132 5.6 25.7727 5.6H54.4091C55.1686 5.6 55.897 5.895 56.434 6.4201C56.971 6.9452 57.2727 7.65739 57.2727 8.4V28ZM47.25 16.8C46.1904 16.8062 45.1705 17.1951 44.3864 17.892C43.7706 17.3447 43.0055 16.9841 42.1841 16.854C41.3627 16.7239 40.5203 16.8299 39.7593 17.1591C38.9983 17.4883 38.3515 18.0265 37.8975 18.7084C37.4435 19.3902 37.2018 20.1864 37.2018 21C37.2018 21.8136 37.4435 22.6098 37.8975 23.2916C38.3515 23.9735 38.9983 24.5117 39.7593 24.8409C40.5203 25.1701 41.3627 25.2761 42.1841 25.146C43.0055 25.0159 43.7706 24.6553 44.3864 24.108C44.9035 24.5676 45.5275 24.8968 46.2042 25.0672C46.8809 25.2376 47.5899 25.244 48.2698 25.0858C48.9496 24.9277 49.5797 24.6097 50.1054 24.1596C50.6311 23.7094 51.0365 23.1406 51.2866 22.5026C51.5366 21.8646 51.6236 21.1765 51.5401 20.4981C51.4566 19.8197 51.2051 19.1715 50.8074 18.6097C50.4097 18.0479 49.8779 17.5894 49.258 17.274C48.638 16.9587 47.9488 16.796 47.25 16.8ZM42.9545 42C42.1951 42 41.4667 42.295 40.9296 42.8201C40.3926 43.3452 40.0909 44.0574 40.0909 44.8V47.6C40.0909 48.3426 39.7892 49.0548 39.2522 49.5799C38.7151 50.105 37.9868 50.4 37.2273 50.4H8.59091C7.83143 50.4 7.10305 50.105 6.56601 49.5799C6.02898 49.0548 5.72727 48.3426 5.72727 47.6V36.4H8.59091C9.35039 36.4 10.0788 36.105 10.6158 35.5799C11.1528 35.0548 11.4545 34.3426 11.4545 33.6C11.4545 32.8574 11.1528 32.1452 10.6158 31.6201C10.0788 31.095 9.35039 30.8 8.59091 30.8H5.72727V28C5.72727 27.2574 6.02898 26.5452 6.56601 26.0201C7.10305 25.495 7.83143 25.2 8.59091 25.2C9.35039 25.2 10.0788 24.905 10.6158 24.3799C11.1528 23.8548 11.4545 23.1426 11.4545 22.4C11.4545 21.6574 11.1528 20.9452 10.6158 20.4201C10.0788 19.895 9.35039 19.6 8.59091 19.6C6.31246 19.6 4.12733 20.485 2.51622 22.0603C0.905111 23.6356 0 25.7722 0 28V47.6C0 49.8278 0.905111 51.9644 2.51622 53.5397C4.12733 55.115 6.31246 56 8.59091 56H37.2273C39.5057 56 41.6909 55.115 43.302 53.5397C44.9131 51.9644 45.8182 49.8278 45.8182 47.6V44.8C45.8182 44.0574 45.5165 43.3452 44.9794 42.8201C44.4424 42.295 43.714 42 42.9545 42ZM14.3182 44.8H17.1818C17.9413 44.8 18.6697 44.505 19.2067 43.9799C19.7437 43.4548 20.0455 42.7426 20.0455 42C20.0455 41.2574 19.7437 40.5452 19.2067 40.0201C18.6697 39.495 17.9413 39.2 17.1818 39.2H14.3182C13.5587 39.2 12.8303 39.495 12.2933 40.0201C11.7562 40.5452 11.4545 41.2574 11.4545 42C11.4545 42.7426 11.7562 43.4548 12.2933 43.9799C12.8303 44.505 13.5587 44.8 14.3182 44.8Z" fill="#0AC700"/>
-                </svg>
+    <div class="mb-10">
+        <div class="flex items-center gap-3 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Rekap Tahun Lalu</h2>
+            <span class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">2025</span>
+        </div>
+        
+        {/* GRID 4 KARTU JUARA */}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            
+             {/* Card 1: Produk Terlaris */}
+             <div class="bg-gradient-to-br from-white to-gray-50 p-6 rounded-3xl shadow-sm border border-gray-100 group hover:shadow-md transition relative overflow-hidden">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Produk Terlaris</div>
+                <h3 class="text-lg font-black text-gray-800 leading-tight min-h-[3.5rem] flex items-center">
+                    {bestProduct?.PRODUCT_NAME || "-"}
+                </h3>
+                <div class="mt-3 flex items-end gap-1">
+                    <span class="text-3xl font-black text-yellow-500">{bestProduct?.total_beli || 0}</span>
+                    <span class="text-sm font-bold text-gray-400 mb-1">Terjual</span>
+                </div>
             </div>
-            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1" >
-                Total Item Stok
+
+            {/* Card 2: Customer Paling Rajin */}
+            <div class="bg-gradient-to-br from-white to-gray-50 p-6 rounded-3xl shadow-sm border border-gray-100 group hover:shadow-md transition relative overflow-hidden">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Order Paling Banyak</div>
+                <h3 class="text-lg font-black text-gray-800 leading-tight min-h-[3.5rem] flex items-center">
+                    {topCustOrder?.CUST_NAME || "-"}
+                </h3>
+                <div class="mt-3 flex items-end gap-1">
+                    <span class="text-3xl font-black text-green-600 ">{topCustOrder?.total_order || 0}</span>
+                    <span class="text-sm font-bold text-gray-400 mb-1">Transaksi</span>
+                </div>
             </div>
-            <div class="text-4xl font-black text-[#2D2D2D]">{totalStock}</div>
+
+            {/* Card 3: Customer Sultan */}
+            <div class="bg-gradient-to-br from-white to-gray-50 p-6 rounded-3xl shadow-sm border border-gray-100 group hover:shadow-md transition relative overflow-hidden">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nilai Order Terbesar</div>
+                <h3 class="text-lg font-black text-gray-800 leading-tight min-h-[3.5rem] flex items-center">
+                    {topCustValue?.CUST_NAME || "-"}
+                </h3>
+                <div class="mt-3">
+                    <span class="text-2xl font-black text-green-600 block truncate">
+                        {formatRupiah(topCustValue?.total_belanja || 0)}
+                    </span>
+                </div>
+            </div>
+
+            {/* Card 4: Tukang Borong (Qty) */}
+            <div class="bg-gradient-to-br from-white to-gray-50 p-6 rounded-3xl shadow-sm border border-gray-100 group hover:shadow-md transition relative overflow-hidden">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Cust Item Terbanyak</div>
+                <h3 class="text-lg font-black text-gray-800 leading-tight min-h-[3.5rem] flex items-center">
+                    {topCustItem?.CUST_NAME || "-"}
+                </h3>
+                <div class="mt-3 flex items-end gap-1">
+                    <span class="text-3xl font-black text-yellow-500">{topCustItem?.total_item || 0}</span>
+                    <span class="text-sm font-bold text-gray-400 mb-1">Item Dibeli</span>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-3xl p-8 shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col items-center text-center" >
-            <div class="mb-3 text-5xl">
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M56.1689 29.9714V56.5339H3V29.9714H56.1689Z" stroke="#FF6A00" stroke-width="3"/>
-                <path d="M29.5845 37.3618C31.1466 37.3618 32.6448 37.9829 33.7495 39.0874C34.8542 40.1921 35.4751 41.6911 35.4751 43.2534C35.475 44.8156 34.8541 46.3138 33.7495 47.4185C32.6448 48.523 31.1467 49.144 29.5845 49.144C28.0223 49.144 26.5241 48.5231 25.4194 47.4185C24.3148 46.3138 23.694 44.8156 23.6938 43.2534C23.6938 41.6911 24.3147 40.1921 25.4194 39.0874C26.5241 37.9828 28.0223 37.3618 29.5845 37.3618ZM43.5474 15.4214L44.1909 16.3237L45.2417 15.9731L49.3403 14.6069L53.5718 26.98H7.26416L35.6265 4.3208L43.5474 15.4214Z" stroke="#FF6A00" stroke-width="3"/>
-                <path d="M56.1913 28.4804H55.671L50.2816 12.7146L4.02467 28.4804L2.97814 28.4716M1.5 28.4834H2.97814L35.9289 2.16064L44.2567 13.838" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
-                <path d="M36.9753 43.253C36.9753 45.2132 36.1966 47.093 34.8106 48.479C33.4246 49.8651 31.5447 50.6437 29.5846 50.6437C27.6244 50.6437 25.7446 49.8651 24.3585 48.479C22.9725 47.093 22.1938 45.2132 22.1938 43.253C22.1938 41.2929 22.9725 39.413 24.3585 38.027C25.7446 36.641 27.6244 35.8623 29.5846 35.8623C31.5447 35.8623 33.4246 36.641 34.8106 38.027C36.1966 39.413 36.9753 41.2929 36.9753 43.253Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
-                <path d="M57.6694 28.4714V58.0343H1.5V28.4714H57.6694Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
-                <path d="M1.5 28.4714H7.41257C7.41257 30.0395 6.78964 31.5434 5.68082 32.6523C4.572 33.7611 3.06811 34.384 1.5 34.384V28.4714ZM57.6694 28.4714H51.7568C51.7568 30.0395 52.3798 31.5434 53.4886 32.6523C54.5974 33.7611 56.1013 34.384 57.6694 34.384V28.4714ZM1.5 58.0343H7.41848C7.41926 57.2568 7.2667 56.4869 6.96955 55.7685C6.67239 55.05 6.23647 54.3973 5.68673 53.8476C5.137 53.2978 4.48424 52.8619 3.76583 52.5647C3.04741 52.2676 2.27744 52.115 1.5 52.1158V58.0343ZM57.6694 58.0343H51.7568C51.7568 56.4662 52.3798 54.9623 53.4886 53.8535C54.5974 52.7446 56.1013 52.1217 57.6694 52.1217V58.0343Z" stroke="#FF6A00" stroke-width="3" stroke-linecap="square"/>
+        {/* TABEL TOP 10 PRODUK */}
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                <svg width="30" height="30" viewBox="0 0 51 51" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19.125 3.1875H31.875C32.7204 3.1875 33.5311 3.52332 34.1289 4.1211C34.7267 4.71887 35.0625 5.52962 35.0625 6.375V47.4141C35.0625 47.5197 35.0205 47.6211 34.9458 47.6958C34.8711 47.7705 34.7697 47.8125 34.6641 47.8125H16.3359C16.2303 47.8125 16.1289 47.7705 16.0542 47.6958C15.9795 47.6211 15.9375 47.5197 15.9375 47.4141V6.375C15.9375 5.52962 16.2733 4.71887 16.8711 4.1211C17.4689 3.52332 18.2796 3.1875 19.125 3.1875ZM4.78125 19.125H11.9531C12.1645 19.125 12.3672 19.209 12.5166 19.3584C12.666 19.5078 12.75 19.7105 12.75 19.9219V47.0156C12.75 47.227 12.666 47.4297 12.5166 47.5791C12.3672 47.7285 12.1645 47.8125 11.9531 47.8125H3.98438C3.35034 47.8125 2.74228 47.5606 2.29395 47.1123C1.84562 46.664 1.59375 46.0559 1.59375 45.4219V22.3125C1.59375 21.4671 1.92958 20.6564 2.52735 20.0586C3.12512 19.4608 3.93587 19.125 4.78125 19.125ZM46.2188 12.75C47.0641 12.75 47.8749 13.0858 48.4727 13.6836C49.0704 14.2814 49.4062 15.0921 49.4062 15.9375V45.4219C49.4062 46.0559 49.1544 46.664 48.7061 47.1123C48.2577 47.5606 47.6497 47.8125 47.0156 47.8125H39.0469C38.8355 47.8125 38.6328 47.7285 38.4834 47.5791C38.334 47.4297 38.25 47.227 38.25 47.0156V13.5469C38.25 13.3355 38.334 13.1328 38.4834 12.9834C38.6328 12.834 38.8355 12.75 39.0469 12.75H46.2188Z" fill="#FEB516"/>
                 </svg>
-
+                Top 10 Produk Terlaris
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-50 text-gray-500 border-b">
+                        <tr>
+                            <th class="py-3 px-4 w-10 text-center">NO</th>
+                            <th class="py-3 px-4">Nama Produk</th>
+                            <th class="py-3 px-4 text-center">Total Terjual</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {top10Products.length > 0 ? top10Products.map((item: any, index: number) => (
+                            <tr class="hover:bg-gray-50 transition">
+                                <td class="py-3 px-4 text-center font-bold text-black">
+                                    {index + 1}
+                                </td>
+                                <td class="py-3 px-4 font-bold text-black">
+                                    {item.PRODUCT_NAME}
+                                </td>
+                                <td class="py-3 px-4 text-center font-black">
+                                    {item.total_beli}
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr><td colspan="4" class="text-center py-6 text-gray-400">Belum ada data tahun lalu.</td></tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
-            <div class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">
-                Total Revenue
-            </div>
-            <div class="text-3xl font-black text-[#2D2D2D]">Rp 0</div>
         </div>
     </div>
 
 
+    {/* --- BAGIAN 2: TAB MENU LAPORAN (BARU) --- */}
+    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+        
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <h3 class="font-bold text-xl text-gray-800 flex gap-4">
+                <svg width="30" height="30" viewBox="0 0 69 69" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M57.2211 24.6848C57.0847 24.3728 56.8939 24.0876 56.6576 23.8424L39.4076 6.59237C39.1624 6.35614 38.8772 6.16534 38.5652 6.02887C38.479 5.98862 38.387 5.96562 38.295 5.934C38.0544 5.85244 37.804 5.80313 37.5504 5.78738C37.49 5.78163 37.4354 5.75 37.375 5.75H17.25C14.0789 5.75 11.5 8.32887 11.5 11.5V57.5C11.5 60.6711 14.0789 63.25 17.25 63.25H51.75C54.9211 63.25 57.5 60.6711 57.5 57.5V25.875C57.5 25.8146 57.4684 25.76 57.4626 25.6967C57.4469 25.4432 57.3976 25.1928 57.316 24.9521C57.2892 24.8601 57.2575 24.771 57.2211 24.6848ZM47.6847 23H40.25V15.5653L47.6847 23ZM17.25 57.5V11.5H34.5V25.875C34.5 26.6375 34.8029 27.3688 35.3421 27.9079C35.8812 28.4471 36.6125 28.75 37.375 28.75H51.75L51.7558 57.5H17.25Z" fill="#FEB516"/>
+                <path d="M23 34.5H46V40.25H23V34.5ZM23 46H46V51.75H23V46ZM23 23H28.75V28.75H23V23Z" fill="#FEB516"/>
+                </svg>
+                Laporan Bulanan
+            </h3>
+            
+            {/* MENU TABS (Gaya seperti di gambar) */}
+            <div class="flex gap-2 overflow-x-auto w-full md:w-auto mt-4 md:mt-0 pb-2 md:pb-0 scrollbar-hide">
+                <button class="tab-btn active" onclick="openTab(event, 'tab-profit')">
+                    Profit ({dataProfit.length})
+                </button>
+                <button class="tab-btn" onclick="openTab(event, 'tab-sales')">
+                    Penjualan ({dataPenjualan.length})
+                </button>
+                <button class="tab-btn" onclick="openTab(event, 'tab-customer')">
+                    Customer ({dataOrder.length})
+                </button>
+                <button class="tab-btn" onclick="openTab(event, 'tab-kasir')">
+                    Kasir ({dataKasir.length})
+                </button>
+            </div>
+        </div>
+
+        {errorMessage && <div class="bg-red-100 text-red-700 p-3 rounded mb-4">{errorMessage}</div>}
+
+
+
+        {/* --- ISI KONTEN TABS --- */}
+        
+        {/* 1. TAB PROFIT */}
+        <div id="tab-profit" class="tab-content block animate-fade">
+            <TabelLaporan 
+                title="Profit penjualan bulanan tahun sebelumnya per produk" 
+                data={dataProfit} 
+                firstColTitle="Nama Produk" 
+                firstColKey="product_name" 
+            />
+        </div>
+
+        {/* 2. TAB SALES (QTY) */}
+        <div id="tab-sales" class="tab-content hidden animate-fade">
+            <TabelLaporan 
+                title="Penjualan bulanan tahun sebelumnya per produk" 
+                data={dataPenjualan} 
+                firstColTitle="Nama Produk" 
+                firstColKey="product_name" 
+            />
+        </div>
+
+        {/* 3. TAB CUSTOMER (Gabungan 2 Tabel) */}
+        <div id="tab-customer" class="tab-content hidden animate-fade">
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <TabelLaporan 
+                    title="Jumlah order bulanan tahun sebelumnya per customer" 
+                    data={dataOrder} 
+                    firstColTitle="Nama Customer" 
+                    firstColKey="customer_name" 
+                />
+                <TabelLaporan 
+                    title=" Total nominal order per customer pada tahun sebelumnya" 
+                    data={dataNominal} 
+                    firstColTitle="Nama Customer" 
+                    firstColKey="customer_name" 
+                />
+            </div>
+        </div>
+
+        {/* 4. TAB KASIR */}
+        <div id="tab-kasir" class="tab-content hidden animate-fade">
+            <TabelLaporan 
+                title="Jumlah layanan bulanan oleh masing-masing kasir pada tahun sebelumnya" 
+                data={dataKasir} 
+                firstColTitle="Nama Admin" 
+                firstColKey="cashier_name" 
+            />
+        </div>
+
+    </div>
+
 </AdminLayout>
+
+{/* --- STYLE & SCRIPT UNTUK TABS --- */}
+<style>
+    /* Style Tombol Tab */
+    .tab-btn {
+        padding: 0.5rem 1rem;
+        border-radius: 999px; /* Rounded pill */
+        font-weight: 700;
+        font-size: 0.875rem;
+        color: #9CA3AF; /* Abu-abu */
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .tab-btn:hover {
+        background-color: #F3F4F6;
+        color: #4B5563;
+    }
+    /* Kalau Aktif: Merah Tebal (Sesuai gambar referensi) */
+    .tab-btn.active {
+        color: #DC2626; /* Merah */
+        background-color: #FEF2F2; /* Merah Pudar */
+    }
+</style>
+
+<script src="../../scripts/tabs.js"></script>
+

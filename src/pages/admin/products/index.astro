@@ -7,60 +7,55 @@ if (Astro.request.method === "POST") {
         const formData = await Astro.request.formData();
         const idToDelete = formData.get("id");
 
-        // Panggil Backend untuk hapus
         const res = await fetch(`http://localhost:3000/api/products/${idToDelete}`, {
             method: "DELETE",
         });
 
         if (res.ok) {
-            // Refresh halaman jika sukses
             return Astro.redirect("/admin/products");
-        } else {
-            console.error("Gagal menghapus produk");
         }
     } catch (e) {
         console.error("Error connection:", e);
     }
 }
 
-// --- 2. FETCH DATA DARI BACKEND (Load Data) ---
-let allProducts: any[] = [];
-let categories: any[] = [];
+// --- 2. FETCH DATA LANGSUNG 
+let allProducts: any[] = [];    
+let categories: any[] = [];      
 let groupedProducts: any = {};
 
-const formatRupiah = (num: number) => "Rp " + num.toLocaleString("id-ID");
+const formatRupiah = (num:number) => "Rp " + Number(num).toLocaleString("id-ID");
 
 try {
     // A. Ambil Data Kategori
     const resCat = await fetch("http://localhost:3000/api/categories");
     const dataCat = await resCat.json();
-    const rawCategories = dataCat.data || dataCat || [];
-
-    categories = rawCategories.map((c: any) => ({
-        id: c.CATEGORY_ID || c.id,
-        name: c.CATEGORY || c.name,
-    }));
+    // Langsung pakai data asli
+    categories = dataCat.data || dataCat || [];
 
     // B. Ambil Data Produk
     const resProd = await fetch("http://localhost:3000/api/products");
     const dataProd = await resProd.json();
-    const rawProducts = dataProd.data || dataProd || [];
+    // Langsung pakai data asli
+    allProducts = dataProd.data || dataProd || [];
 
-    allProducts = rawProducts.map((p: any) => ({
-        id: p.PRODUCT_ID,
-        name: p.PRODUCT_NAME,
-        price: p.PRICE,
-        stock: p.STOCK,
-        categoryId: p.CATEGORY_ID,
-        image: p.IMAGE || "https://placehold.co/100x100?text=No+Img",
-    }));
+    // C. Grouping Manual (Pakai Loop Biasa)
+    // Kita siapkan wadah array untuk setiap kategori
+    for (const cat of categories) {
+        // Filter manual: Cari produk yang CATEGORY_ID nya sama dengan ID kategori ini
+        const produkDiKategoriIni = [];
+        
+        for (const p of allProducts) {
+            // Pastikan perbandingannya string vs string atau number vs number
+            if (String(p.CATEGORY_ID) === String(cat.CATEGORY_ID || cat.id)) {
+                produkDiKategoriIni.push(p);
+            }
+        }
+        
+        // Simpan ke object groupedProducts
+        groupedProducts[cat.CATEGORY_ID || cat.id] = produkDiKategoriIni;
+    }
 
-    // C. Grouping Produk per Kategori
-    categories.forEach((cat: any) => {
-        groupedProducts[cat.id] = allProducts.filter(
-            (p: any) => p.categoryId == cat.id,
-        );
-    });
 } catch (e) {
     console.log("Error fetch data:", e);
 }
@@ -71,7 +66,7 @@ try {
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h1 class="text-3xl font-black text-gray-800">Daftar Produk</h1>
-                <p class="text-gray-500">Kelola menu makanan dan minuman di sini.</p>
+                <p class="text-gray-500">Kelola menu makanan di sini.</p>
             </div>
             <a href="/admin/products/add" class="bg-[#FEB516] hover:bg-yellow-500 text-yellow-900 font-bold py-3 px-6 rounded-xl shadow-lg transition flex items-center gap-2">
                 <span>+</span> Tambah Produk
@@ -79,18 +74,23 @@ try {
         </div>
 
         <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+            {/* TAB HEADERS */}
             <div class="flex border-b border-gray-100 overflow-x-auto">
                 <button class="tab-btn active px-8 py-5 font-bold text-gray-500 hover:text-red-600 border-b-2 border-transparent hover:border-red-600 transition whitespace-nowrap" onclick="openTab(event, 'all')">
                     Semua ({allProducts.length})
                 </button>
+                {/* Loop Kategori */}
                 {categories.map((cat: any) => (
-                    <button class="tab-btn px-8 py-5 font-bold text-gray-500 hover:text-red-600 border-b-2 border-transparent hover:border-red-600 transition whitespace-nowrap" onclick={`openTab(event, 'cat-${cat.id}')`}>
-                        {cat.name} ({groupedProducts[cat.id]?.length || 0})
+                    <button class="tab-btn px-8 py-5 font-bold text-gray-500 hover:text-red-600 border-b-2 border-transparent hover:border-red-600 transition whitespace-nowrap" 
+                            onclick={`openTab(event, 'cat-${cat.CATEGORY_ID || cat.id}')`}>
+                        {/* PANGGIL DATA ASLI: cat.CATEGORY */}
+                        {cat.CATEGORY || cat.name} ({groupedProducts[cat.CATEGORY_ID || cat.id]?.length || 0})
                     </button>
                 ))}
             </div>
 
             <div class="p-6">
+                {/* --- TAB 1: SEMUA PRODUK --- */}
                 <div id="all" class="tab-content block">
                     {allProducts.length > 0 ? (
                         <div class="overflow-x-auto">
@@ -107,24 +107,32 @@ try {
                                     {allProducts.map((item: any) => (
                                         <tr class="product-row hover:bg-gray-50 transition group">
                                             <td class="p-4 flex items-center gap-4">
-                                                <img src={item.image} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.name} onerror="this.src='https://placehold.co/100?text=No+Img'" />
-                                                <span class="font-bold text-gray-700">{item.name}</span>
+                                                {/* PANGGIL DATA ASLI: IMAGE & PRODUCT_NAME */}
+                                                <img src={item.IMAGE || "https://placehold.co/100x100?text=No+Img"} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.PRODUCT_NAME} onerror="this.src='https://placehold.co/100?text=No+Img'" />
+                                                <span class="font-bold text-gray-700">{item.PRODUCT_NAME}</span>
                                             </td>
-                                            <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.price)}</td>
+                                            {/* PANGGIL DATA ASLI: PRICE */}
+                                            <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.PRICE)}</td>
                                             <td class="p-4 text-center">
-                                                <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.stock > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
-                                                    {item.stock}
+                                                {/* PANGGIL DATA ASLI: STOCK */}
+                                                <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.STOCK > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
+                                                    {item.STOCK}
                                                 </span>
                                             </td>
                                             <td class="p-4 text-right">
                                                 <div class="flex items-center justify-end gap-2">
-                                                    <a href={"/admin/products/edit/" + item.id} class="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 p-2 rounded-lg transition inline-block mr-2" title="Edit">
-                                                        ✏️
+                                                    {/* PANGGIL DATA ASLI: PRODUCT_ID */}
+                                                    <a href={"/admin/products/edit/" + item.PRODUCT_ID} class="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 p-2 rounded-lg transition inline-block mr-2" title="Edit">
+                                                        <svg width="27" height="27" viewBox="0 0 27 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M18.0394 3.39188C18.6452 2.78596 19.4587 2.43311 20.3151 2.40491C21.1714 2.3767 22.0064 2.67525 22.6508 3.24001L22.8128 3.39188L23.6081 4.18726C24.2137 4.79298 24.5664 5.60631 24.5946 6.46239C24.6228 7.31847 24.3244 8.15324 23.76 8.79751L23.6081 8.95951L10.9946 21.5741C10.8163 21.7525 10.6002 21.8885 10.3624 21.9724L10.1801 22.0253L5.16938 23.1818C4.99381 23.2226 4.81101 23.2206 4.63635 23.1761C4.46169 23.1315 4.3003 23.0456 4.16578 22.9256C4.03125 22.8056 3.92752 22.6551 3.86332 22.4867C3.79912 22.3182 3.77634 22.1368 3.79688 21.9578L3.81938 21.8306L4.97476 16.8188C5.03184 16.5729 5.14332 16.343 5.30101 16.146L5.42588 16.0054L18.0394 3.39188ZM17.244 7.36876L7.13026 17.4825L6.41476 20.5853L9.51751 19.8686L19.6313 9.75488L17.244 7.36876ZM21.222 4.98263C21.0283 4.78894 20.7706 4.67258 20.4971 4.65538C20.2237 4.63819 19.9535 4.72135 19.737 4.88926L19.6313 4.98263L18.8348 5.77801L21.222 8.16413L22.0174 7.36876C22.2111 7.17504 22.3274 6.9173 22.3446 6.6439C22.3618 6.3705 22.2787 6.10021 22.1108 5.88376L22.0174 5.77801L21.222 4.98263Z" fill="black"/>
+                                                        </svg> 
                                                     </a>
-                                                    <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.name}" selamanya?');`}>
-                                                        <input type="hidden" name="id" value={item.id} />
-                                                        <button type="submit" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="Hapus">
-                                                            🗑️
+                                                    <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.PRODUCT_NAME}" selamanya?');`}>
+                                                        <input type="hidden" name="id" value={item.PRODUCT_ID} />
+                                                        <button type="submit"class="inline-flex items-center justify-center gap-1 text-white text-xs font-bold px-4 py-1.5 rounded-full transition cursor-pointer" title="Hapus">
+                                                            <svg width="22" height="21" viewBox="0 0 22 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M15.125 2.29688V3.9375H18.2188C18.4923 3.9375 18.7546 4.04121 18.948 4.22582C19.1413 4.41042 19.25 4.6608 19.25 4.92188C19.25 5.18295 19.1413 5.43333 18.948 5.61793C18.7546 5.80254 18.4923 5.90625 18.2188 5.90625H3.78125C3.50775 5.90625 3.24544 5.80254 3.05205 5.61793C2.85865 5.43333 2.75 5.18295 2.75 4.92188C2.75 4.6608 2.85865 4.41042 3.05205 4.22582C3.24544 4.04121 3.50775 3.9375 3.78125 3.9375H6.875V2.29688C6.875 1.029 7.953 0 9.28125 0H12.7188C14.047 0 15.125 1.029 15.125 2.29688ZM6.182 8.76094L7.0895 17.4234C7.09803 17.5044 7.13779 17.5795 7.20106 17.6341C7.26433 17.6887 7.3466 17.7188 7.43188 17.7188H14.5681C14.6534 17.7188 14.7357 17.6887 14.7989 17.6341C14.8622 17.5795 14.902 17.5044 14.9105 17.4234L15.818 8.76094C15.8521 8.50667 15.9888 8.27513 16.1989 8.11555C16.4091 7.95597 16.6762 7.88094 16.9434 7.90642C17.2106 7.93189 17.4569 8.05586 17.6298 8.25196C17.8028 8.44806 17.8888 8.70082 17.8695 8.9565L16.962 17.619C16.9027 18.1857 16.6249 18.7112 16.1825 19.0934C15.7402 19.4757 15.1648 19.6874 14.5681 19.6875H7.43188C6.83541 19.6874 6.26023 19.4759 5.81791 19.0939C5.37559 18.712 5.09765 18.1868 5.038 17.6203L4.1305 8.95781C4.11328 8.82748 4.12356 8.69518 4.16074 8.5687C4.19792 8.44222 4.26124 8.32413 4.34697 8.22137C4.43271 8.11862 4.53912 8.03328 4.65995 7.97039C4.78077 7.9075 4.91356 7.86833 5.05049 7.85519C5.18741 7.84205 5.32571 7.85521 5.45723 7.89388C5.58875 7.93255 5.71083 7.99596 5.81628 8.08037C5.92173 8.16477 6.00841 8.26848 6.07122 8.38536C6.13403 8.50224 6.1717 8.62994 6.182 8.76094ZM8.9375 2.29688V3.9375H13.0625V2.29688C13.0625 2.20985 13.0263 2.12639 12.9618 2.06486C12.8974 2.00332 12.8099 1.96875 12.7188 1.96875H9.28125C9.19008 1.96875 9.10265 2.00332 9.03818 2.06486C8.97372 2.12639 8.9375 2.20985 8.9375 2.29688Z" fill="black"/>
+                                                            </svg>
                                                         </button>
                                                     </form>
                                                 </div>
@@ -139,9 +147,10 @@ try {
                     )}
                 </div>
 
+                {/* --- TAB 2 dst: PER KATEGORI --- */}
                 {categories.map((cat: any) => (
-                    <div id={`cat-${cat.id}`} class="tab-content hidden">
-                        {groupedProducts[cat.id]?.length > 0 ? (
+                    <div id={`cat-${cat.CATEGORY_ID || cat.id}`} class="tab-content hidden">
+                        {groupedProducts[cat.CATEGORY_ID || cat.id]?.length > 0 ? (
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left border-collapse">
                                     <thead class="bg-gray-50 text-gray-600 uppercase text-xs font-bold tracking-wider">
@@ -153,27 +162,31 @@ try {
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-100">
-                                        {groupedProducts[cat.id].map((item: any) => (
+                                        {groupedProducts[cat.CATEGORY_ID || cat.id].map((item: any) => (
                                             <tr class="hover:bg-gray-50 transition group">
                                                 <td class="p-4 flex items-center gap-4">
-                                                    <img src={item.image} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.name} onerror="this.src='https://placehold.co/100?text=No+Img'" />
-                                                    <span class="font-bold text-gray-700">{item.name}</span>
+                                                    <img src={item.IMAGE || "https://placehold.co/100?text=No+Img"} class="w-12 h-12 object-cover rounded-lg border shadow-sm bg-white" alt={item.PRODUCT_NAME} onerror="this.src='https://placehold.co/100?text=No+Img'" />
+                                                    <span class="font-bold text-gray-700">{item.PRODUCT_NAME}</span>
                                                 </td>
-                                                <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.price)}</td>
+                                                <td class="p-4 text-gray-700 font-bold">{formatRupiah(item.PRICE)}</td>
                                                 <td class="p-4 text-center">
-                                                    <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.stock > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
-                                                        {item.stock}
+                                                    <span class={`px-3 py-1 rounded-full text-xs font-bold ${item.STOCK > 5 ? "text-black" : "bg-red-100 text-red-700"}`}>
+                                                        {item.STOCK}
                                                     </span>
                                                 </td>
                                                 <td class="p-4 text-right">
                                                     <div class="flex items-center justify-end gap-2">
-                                                        <a href={"/admin/products/edit/" + item.id} class="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 p-2 rounded-lg transition inline-block mr-2" title="Edit">
-                                                            ✏️
+                                                        <a href={"/admin/products/edit/" + item.PRODUCT_ID} class="inline-flex items-center gap-1 text-white text-xs font-bold px-4 py-1.5 rounded-full transition" title="Edit">
+                                                            <svg width="29" height="29" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M24.0525 4.5225C24.8602 3.71459 25.945 3.24413 27.0868 3.20653C28.2285 3.16892 29.3419 3.56699 30.201 4.32L30.417 4.5225L31.4775 5.583C32.285 6.39063 32.7552 7.47507 32.7928 8.6165C32.8304 9.75794 32.4326 10.871 31.68 11.73L31.4775 11.946L14.6595 28.7655C14.4217 29.0033 14.1337 29.1847 13.8165 29.2965L13.5735 29.367L6.89251 30.909C6.65842 30.9634 6.41467 30.9608 6.1818 30.9014C5.94892 30.842 5.73374 30.7274 5.55437 30.5675C5.375 30.4075 5.23669 30.2068 5.15109 29.9822C5.06549 29.7576 5.03512 29.5158 5.06251 29.277L5.09251 29.1075L6.63301 22.425C6.70912 22.0972 6.85776 21.7907 7.06801 21.528L7.23451 21.3405L24.0525 4.5225ZM22.992 9.825L9.50701 23.31L8.55301 27.447L12.69 26.4915L26.175 13.0065L22.992 9.825ZM28.296 6.6435C28.0377 6.38523 27.6941 6.23009 27.3295 6.20716C26.965 6.18424 26.6046 6.29512 26.316 6.519L26.175 6.6435L25.113 7.704L28.296 10.8855L29.3565 9.825C29.6148 9.56671 29.7699 9.22306 29.7928 8.85852C29.8158 8.49398 29.7049 8.1336 29.481 7.845L29.3565 7.704L28.296 6.6435Z" fill="black"/>
+                                                            </svg>
                                                         </a>
-                                                        <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.name}" selamanya?');`}>
-                                                            <input type="hidden" name="id" value={item.id} />
+                                                        <form method="POST" class="inline" onsubmit={`return confirm('Hapus "${item.PRODUCT_NAME}" selamanya?');`}>
+                                                            <input type="hidden" name="id" value={item.PRODUCT_ID} />
                                                             <button type="submit" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="Hapus">
-                                                                🗑️
+                                                                <svg width="29" height="29" viewBox="0 0 29 29" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <path d="M19.9375 3.17188V5.4375H24.0156C24.3762 5.4375 24.7219 5.58072 24.9768 5.83565C25.2318 6.09058 25.375 6.43635 25.375 6.79688C25.375 7.1574 25.2318 7.50317 24.9768 7.7581C24.7219 8.01303 24.3762 8.15625 24.0156 8.15625H4.98438C4.62385 8.15625 4.27808 8.01303 4.02315 7.7581C3.76822 7.50317 3.625 7.1574 3.625 6.79688C3.625 6.43635 3.76822 6.09058 4.02315 5.83565C4.27808 5.58072 4.62385 5.4375 4.98438 5.4375H9.0625V3.17188C9.0625 1.421 10.4835 0 12.2344 0H16.7656C18.5165 0 19.9375 1.421 19.9375 3.17188ZM8.149 12.0984L9.34525 24.0609C9.35649 24.1728 9.4089 24.2765 9.49231 24.3518C9.57571 24.4272 9.68415 24.4689 9.79656 24.4688H19.2034C19.3158 24.4689 19.4243 24.4272 19.5077 24.3518C19.5911 24.2765 19.6435 24.1728 19.6547 24.0609L20.851 12.0984C20.8959 11.7473 21.0761 11.4276 21.3531 11.2072C21.6301 10.9868 21.9822 10.8832 22.3345 10.9184C22.6867 10.9536 23.0113 11.1248 23.2393 11.3956C23.4673 11.6664 23.5806 12.0154 23.5553 12.3685L22.359 24.331C22.2808 25.1136 21.9146 25.8393 21.3315 26.3671C20.7484 26.895 19.99 27.1874 19.2034 27.1875H9.79656C9.01031 27.1874 8.25213 26.8953 7.66906 26.3678C7.086 25.8403 6.71962 25.1151 6.641 24.3328L5.44475 12.3703C5.42205 12.1903 5.4356 12.0076 5.48461 11.833C5.53362 11.6583 5.61709 11.4952 5.7301 11.3533C5.84312 11.2114 5.98339 11.0936 6.14266 11.0067C6.30192 10.9199 6.47696 10.8658 6.65746 10.8476C6.83795 10.8295 7.02026 10.8477 7.19362 10.9011C7.36699 10.9545 7.52792 11.042 7.66692 11.1586C7.80592 11.2752 7.92018 11.4184 8.00297 11.5798C8.08577 11.7412 8.13542 11.9175 8.149 12.0984ZM11.7812 3.17188V5.4375H17.2188V3.17188C17.2188 3.0517 17.171 2.93644 17.086 2.85147C17.0011 2.76649 16.8858 2.71875 16.7656 2.71875H12.2344C12.1142 2.71875 11.9989 2.76649 11.914 2.85147C11.829 2.93644 11.7812 3.0517 11.7812 3.17188Z" fill="black"/>
+                                                                </svg>
                                                             </button>
                                                         </form>
                                                     </div>
@@ -184,7 +197,9 @@ try {
                                 </table>
                             </div>
                         ) : (
-                            <div class="text-center py-20 text-gray-400">Tidak ada produk di kategori {cat.name}.</div>
+                            <div class="text-center py-20 text-gray-400">
+                                Tidak ada produk di kategori {cat.CATEGORY || cat.name}.
+                            </div>
                         )}
                     </div>
                 ))}
@@ -192,9 +207,9 @@ try {
         </div>
     </div>
 </AdminLayout>
+
 <script is:inline>
-    // 1. LOGIC PINDAH TAB (UI ONLY)
-    
+    // 1. LOGIC PINDAH TAB (Tetap sama karena ini UI Only)
     function openTab(evt, tabName) {
         var i, tabcontent, tablinks;
         tabcontent = document.getElementsByClassName("tab-content");
@@ -222,4 +237,3 @@ try {
         if (firstBtn) firstBtn.click();
     });
 </script>
-

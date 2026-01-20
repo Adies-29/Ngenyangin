@@ -1,227 +1,278 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 
-// --- 1. SETUP VARIABEL ---
-let transactions: any[] = []; 
-let detailItems: any[] = [];
-let selectedTransaction: any = null;
+// --- 1. LOGIC BACKEND & FILTER (TETAP AMAN) ---
+let transactions = [];
+let detailItems = [];
+let selectedTransaction = null;
 let totalPenghasilan = 0;
 let totalPengunjung = 0;
+let errorMessage = "";
 
-// Helper: Format Rupiah
-const formatRupiah = (number: any) => {
-    return new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0
-    }).format(number);
-}
+// Helper Format
+const formatRupiah = (num: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
+const formatDate = (date: string) => date ? new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "-";
 
-// Helper: Format Tanggal
-const formatDate = (dateString: any) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-}
+// Ambil Parameter URL
+const searchParam = Astro.url.searchParams.get('search') || "";
+const dateParam = Astro.url.searchParams.get('date') || "";
+const selectedId = Astro.url.searchParams.get('id');
 
 try {
-    // --- 2. FETCH LIST TRANSAKSI (Main Data) ---
-    const res = await fetch('http://localhost:3000/api/transactions'); 
+    const res = await fetch('http://localhost:3000/api/transactions');
+    if (!res.ok) throw new Error("Gagal koneksi ke backend");
+    
     const data = await res.json();
-    const rawData = data.data || data || [];
+    let allTransactions = data.data || data || []; 
 
-    // Mapping Data
-    transactions = rawData.map((t: any, index: number) => ({
-        no: index + 1,
-        id: t.ORDER_ID, 
-        customer: t.CUST_NAME || "Non-Member",
-        date: t.ORDER_DATE,
-        gateway: t.PAYMENT_METHOD || "Tunai",
-        total: t.TOTAL,
-        receipt: t.RECEIPT_NUMBER
-    }));
+    // FILTER LOGIC
+    transactions = allTransactions.filter((trx: any) => {
+        let isValid = true;
+        // 1. Cari Nama/ID
+        // 2. Cari Tanggal
+        if (dateParam) {
+            const inputDate = new Date(dateParam).toDateString();
+            const trxDate = new Date(trx.ORDER_DATE).toDateString();
+            if (inputDate !== trxDate) isValid = false;
+        }
+        return isValid;
+    });
 
-    totalPengunjung = transactions.length;
-    totalPenghasilan = transactions.reduce((acc, curr) => acc + Number(curr.total), 0);
-
-    // --- 3. LOGIKA SERVER: HANDLE DETAIL (Berdasarkan URL ?id=...) ---
-    const selectedId = Astro.url.searchParams.get('id'); // Ambil ID dari URL
-
+    // AMBIL DETAIL JIKA ADA ID
     if (selectedId) {
-        // A. Cari Header Transaksi dari list yang sudah ada
-        selectedTransaction = transactions.find(t => String(t.id) === String(selectedId));
-
-        // B. Fetch Item Detail dari Backend (Server-Side Fetch)
+        selectedTransaction = allTransactions.find((t: any) => String(t.ORDER_ID) === String(selectedId));
         if (selectedTransaction) {
             const resDetail = await fetch(`http://localhost:3000/api/transactions/${selectedId}`);
-            const rawItems = await resDetail.json();
-            
-            // Mapping Item agar aman
-            detailItems = (rawItems || []).map((item: any) => ({
-                name: item.PRODUCT_NAME || item.product_name || "Produk dihapus",
-                price: item.PRICE || item.price || 0,
-                qty: item.QUANTITY || item.QTY || item.qty || 0,
-                subtotal: item.SUBTOTAL || ((item.PRICE || 0) * (item.QUANTITY || 0))
-            }));
+            const dataDetail = await resDetail.json();
+            detailItems = dataDetail.data || dataDetail || []; 
         }
     }
 
+    // HITUNG STATISTIK 
+    totalPengunjung = transactions.length;
+    totalPenghasilan = transactions.reduce((acc: number, curr: any) => acc + Number(curr.TOTAL), 0);
+
+
+    // muncul 5 transaksi TERAKHIR
+    transactions.sort((a: any, b: any) => b.ORDER_ID - a.ORDER_ID);
 } catch (e) {
-    console.error("Error Fetching Data:", e);
+    console.error("ERROR BACKEND:", e);
+    errorMessage = "Gagal memuat data.";
 }
 ---
 
 <AdminLayout title="Transaksi">
-  <h2 class="text-3xl font-bold mb-6">Daftar Transaksi</h2>
+  <h2 class="text-3xl font-bold mb-6 text-black">Transaksi dan Customer</h2>
 
-  <div class="flex flex-col xl:flex-row gap-6">
+ <!-- ERROR MESSAGE -->
+  {errorMessage && (
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6">
+        {errorMessage}
+    </div>
+  )}
+
+  
+  <div class="flex flex-col xl:flex-row gap-6 mb-8 items-start">
     
-    <div class="flex-1 space-y-6">
-      <div class="bg-white rounded-2xl p-6 shadow border">
-        <h3 class="font-bold text-lg mb-4">Transaksi Customers</h3>
-
-        <div class="overflow-x-auto max-h-[400px] overflow-y-auto border border-gray-100 rounded-lg">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-100 text-gray-600">
-              <tr>
-                <th class="py-3 px-4 text-left">No</th>
-                <th class="py-3 px-4 text-left">ID_Transaksi</th>
-                <th class="py-3 px-4 text-left">Customer</th>
-                <th class="py-3 px-4 text-left">Date</th>
-                <th class="py-3 px-4 text-center">Gateway</th>
-                <th class="py-3 px-4 text-right">Total</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {transactions.map((trx) => (
-                <tr class={"border-b transition group hover:bg-gray-50"}>
-                    <td class="py-4 px-4 text-gray-500">
-                        <a href={`?id=${trx.id}#detail-card`} class="block w-full h-full">{trx.no}.</a>
-                    </td>
-                    <td class="py-4 px-4 font-bold text-red-600">
-                        <a href={`?id=${trx.id}#detail-card`} class="block w-full h-full">#{trx.id}</a>
-                    </td>
-                    <td class="py-4 px-4 font-medium">
-                        <a href={`?id=${trx.id}#detail-card`} class="block w-full h-full">{trx.customer}</a>
-                    </td>
-                    <td class="py-4 px-4 text-xs text-gray-500">
-                        <a href={`?id=${trx.id}#detail-card`} class="block w-full h-full">{formatDate(trx.date)}</a>
-                    </td>
-                    <td class="py-4 px-4 text-center">
-                        <a href={`?id=${trx.id}`} class="block w-full h-full">
-                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                                {trx.gateway}
-                            </span>
-                        </a>
-                    </td>
-                    <td class="py-4 px-4 text-right font-semibold text-gray-800">
-                        <a href={`?id=${trx.id}`} class="block w-full h-full">{formatRupiah(trx.total)}</a>
-                    </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <!-- KIRI: TABEL TRANSAKSI (Card Putih) -->
+    <div class="flex-1 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+        
+        <!-- HEADER CARD -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+                <svg width="30" height="30" viewBox="0 0 37 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M29.2917 10.7917V6.16667C29.2917 5.75779 29.1292 5.36566 28.8401 5.07654C28.551 4.78743 28.1589 4.625 27.75 4.625H7.70833C6.89058 4.625 6.10632 4.94985 5.52809 5.52809C4.94985 6.10632 4.625 6.89058 4.625 7.70833C4.625 8.52608 4.94985 9.31034 5.52809 9.88858C6.10632 10.4668 6.89058 10.7917 7.70833 10.7917H30.8333C31.2422 10.7917 31.6343 10.9541 31.9235 11.2432C32.2126 11.5323 32.375 11.9245 32.375 12.3333V18.5M32.375 18.5H27.75C26.9323 18.5 26.148 18.8249 25.5698 19.4031C24.9915 19.9813 24.6667 20.7656 24.6667 21.5833C24.6667 22.4011 24.9915 23.1853 25.5698 23.7636C26.148 24.3418 26.9323 24.6667 27.75 24.6667H32.375C32.7839 24.6667 33.176 24.5042 33.4651 24.2151C33.7542 23.926 33.9167 23.5339 33.9167 23.125V20.0417C33.9167 19.6328 33.7542 19.2407 33.4651 18.9515C33.176 18.6624 32.7839 18.5 32.375 18.5Z" stroke="#FEB516" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4.625 7.70837V29.2917C4.625 30.1095 4.94985 30.8937 5.52809 31.472C6.10632 32.0502 6.89058 32.375 7.70833 32.375H30.8333C31.2422 32.375 31.6343 32.2126 31.9235 31.9235C32.2126 31.6344 32.375 31.2423 32.375 30.8334V24.6667" stroke="#FEB516" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Transaksi Customer
+            </h3>
+            
+            <!-- cari Tanggal -->
+            <form class="flex gap-2 w-full md:w-auto">
+                <input 
+                    type="date"
+                    name="date" 
+                    value={dateParam}
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                />
+                <button type="submit" class="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-4 py-2 rounded-lg text-sm transition flex gap-2 items-center" >
+                    <svg width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.15 18.375L11.6375 12.8625C11.2 13.2125 10.6969 13.4896 10.1281 13.6937C9.55938 13.8979 8.95417 14 8.3125 14C6.72292 14 5.37775 13.4493 4.277 12.348C3.17625 11.2467 2.62558 9.9015 2.625 8.3125C2.62442 6.7235 3.17508 5.37833 4.277 4.277C5.37892 3.17567 6.72408 2.625 8.3125 2.625C9.90092 2.625 11.2464 3.17567 12.3489 4.277C13.4514 5.37833 14.0018 6.7235 14 8.3125C14 8.95417 13.8979 9.55937 13.6938 10.1281C13.4896 10.6969 13.2125 11.2 12.8625 11.6375L18.375 17.15L17.15 18.375ZM8.3125 12.25C9.40625 12.25 10.3361 11.8673 11.102 11.102C11.8679 10.3367 12.2506 9.40683 12.25 8.3125C12.2494 7.21817 11.8668 6.28863 11.102 5.52388C10.3373 4.75913 9.40742 4.37617 8.3125 4.375C7.21758 4.37383 6.28804 4.75679 5.52388 5.52388C4.75971 6.29096 4.37675 7.2205 4.375 8.3125C4.37325 9.4045 4.75621 10.3343 5.52388 11.102C6.29154 11.8697 7.22108 12.2523 8.3125 12.25Z" fill="black"/>
+                    </svg>
+                    Cari
+                </button>
+                {(dateParam || searchParam) && (
+                    <a href="/admin/transactions" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-sm transition flex items-center">
+                        Reset
+                    </a>
+                )}
+            </form>
         </div>
-        <p class="text-xs text-gray-400 mt-4 italic text-center">*Klik baris untuk lihat detail</p>
-      </div>
 
-      {selectedTransaction && (
-          <div id="detail-card" class="bg-white rounded-2xl p-6 shadow border animate-fade">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="font-bold text-lg">Detail Transaksi</h3>
-                <a href="/admin/transactions" class="text-gray-400 hover:text-red-500 text-sm font-bold no-underline">
-                    ✕ Tutup
-                </a>
-            </div>
-
-            <div class="flex flex-col md:flex-row gap-8">
-                <div class="w-full md:w-1/3 space-y-4 text-sm">
-                    <div>
-                        <p class="text-gray-400">ID Transaksi</p>
-                        <p class="font-bold text-red-600">#{selectedTransaction.id}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-400">Date</p>
-                        <p class="font-semibold">{formatDate(selectedTransaction.date)}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-400">Status</p>
-                        <span class="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">PAID</span>
-                    </div>
-                    <div>
-                        <p class="text-gray-400">Pembayaran</p>
-                        <p class="font-semibold">{selectedTransaction.gateway}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-400">Nama</p>
-                        <p class="font-bold text-lg">{selectedTransaction.customer}</p>
-                    </div>
-                </div>
-
-                <div class="w-full md:w-2/3">
-                    <div class="border-l-4 border-yellow-400 pl-3 mb-4">
-                        <h4 class="font-bold">Item</h4>
-                    </div>
-
-                    <div class="bg-gray-50 rounded-xl p-4">
-                        <table class="w-full text-sm">
-                            <thead class="border-b text-gray-500">
-                                <tr>
-                                    <th class="text-left pb-2">ITEM</th>
-                                    <th class="text-left pb-2">HARGA</th>
-                                    <th class="text-center pb-2">QTY</th>
-                                    <th class="text-right pb-2">SUBTOTAL</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {detailItems.length > 0 ? (
-                                    detailItems.map((item) => (
-                                        <tr class="hover:bg-gray-100 transition">
-                                            <td class="pt-3 pb-1 font-medium text-gray-700">{item.name}</td>
-                                            <td class="pt-3 pb-1 text-gray-500">{formatRupiah(item.price)}</td>
-                                            <td class="pt-3 pb-1 text-center font-bold">x{item.qty}</td>
-                                            <td class="pt-3 pb-1 text-right font-bold text-gray-800">{formatRupiah(item.subtotal)}</td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr><td colspan="4" class="text-center py-4 text-gray-400">Item tidak ditemukan.</td></tr>
-                                )}
-                            </tbody>
-                            <tfoot>
-                                <tr class="border-t">
-                                    <td colspan="3" class="pt-4 font-bold text-gray-600">Total Pembayaran</td>
-                                    <td class="pt-4 text-right font-bold text-lg text-gray-800">
-                                        {formatRupiah(selectedTransaction.total)}
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-          </div>
-      )}
+        <!-- TABEL LIST -->
+        <div class="overflow-x-auto max-h-[350px] overflow-y-auto border rounded-lg">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100 text-gray-700 font-bold sticky top-0 z-10">
+                    <tr>
+                        <th class="py-3 px-4 text-left rounded-tl-lg">No</th>
+                        <th class="py-3 px-4 text-left">ID Transaksi</th>
+                        <th class="py-3 px-4 text-left">Customer</th>
+                        <th class="py-3 px-4 text-left">Date</th>
+                        <th class="py-3 px-4 text-center">P.Gateway</th>
+                        <th class="py-3 px-4 text-right rounded-tr-lg">Total</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {transactions.length > 0 ? transactions.map((trx: any, index: number) => (
+                         // Baris Tabel (Klik untuk detail)
+                        <tr class={`hover:bg-gray-50 transition cursor-pointer group ${String(selectedTransaction?.ORDER_ID) === String(trx.ORDER_ID) ? 'bg-yellow-50' : ''}`}>
+                            <td class="p-0"><a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4 text-gray-500">{index + 1}.</a></td>
+                            <td class="p-0"><a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4 font-bold text-red-500">#{trx.ORDER_ID}</a></td>
+                            <td class="p-0"><a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4 font-medium text-gray-800">{trx.CUST_NAME || "-"}</a></td>
+                            <td class="p-0"><a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4 text-gray-500">{formatDate(trx.ORDER_DATE)}</a></td>
+                            <td class="p-0 text-center">
+                                <a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4">
+                                    <span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold uppercase">{trx.PAYMENT_METHOD}</span>
+                                </a>
+                            </td>
+                            <td class="p-0"><a href={`?id=${trx.ORDER_ID}&date=${dateParam}&search=${searchParam}#detail-section`} class="block py-4 px-4 text-right font-bold text-gray-800">{formatRupiah(trx.TOTAL)}</a></td>
+                        </tr>
+                    )) : (
+                        <tr><td colspan="6" class="text-center py-8 text-gray-400 italic">Tidak ada transaksi ditemukan.</td></tr>
+                    )}
+                </tbody>
+            </table>
+            <p class="text-xs text-gray-400 mt-4 italic text-center">*Klik salah satu transaksi untuk melihat detail</p>
+        </div>
     </div>
 
-    <div class="w-full xl:w-80 space-y-6">
-      <div class="bg-white rounded-2xl p-6 shadow border text-center">
-        <h4 class="font-bold text-lg mb-4">Penghasilan</h4>
-        <div class="bg-red-600 rounded-xl py-4 shadow-lg shadow-red-200">
-          <span class="text-yellow-300 text-2xl font-extrabold italic block">
-            {formatRupiah(totalPenghasilan)}
-          </span>
+    {/* 2. KANAN: SIDEBAR STATISTIK (Kotak Merah) */}
+    <div class="w-full lg:w-1/3 flex flex-col gap-4">
+        
+        {/* Card Penghasilan */}
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 text-center">
+            <h4 class="font-bold text-lg mb-4 text-gray-800">Penghasilan</h4>
+            <div class="bg-[#D80000] rounded-xl py-6 shadow-md text-white">
+                <span class="text-yellow-400 text-2xl font-black italic block">
+                    {formatRupiah(totalPenghasilan)}
+                </span>
+            </div>
         </div>
-      </div>
 
-      <div class="bg-white rounded-2xl p-6 shadow border text-center">
-        <h4 class="font-bold text-lg mb-4">Total Pengunjung</h4>
-        <div class="bg-red-600 rounded-xl py-8 shadow-lg shadow-red-200">
-          <span class="text-yellow-300 text-4xl font-extrabold italic block">
-            {totalPengunjung}
-          </span>
+        {/* Card Pengunjung */}
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 text-center">
+            <h4 class="font-bold text-lg mb-4 text-gray-800">Total Pengunjung</h4>
+            <div class="bg-[#D80000] rounded-xl py-8 shadow-md text-white">
+                <span class="text-yellow-400 text-4xl font-black italic block">
+                    {totalPengunjung}
+                </span>
+            </div>
         </div>
-      </div>
+
     </div>
   </div>
+
+  {/* --- LAYOUT BAWAH: DETAIL TRANSAKSI (Muncul kalau diklik) --- */}
+  {selectedTransaction && (
+      <div id="detail-section" class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 animate-fade scroll-mt-10">
+        
+        {/* Header Detail */}
+        <div class="flex justify-between items-start mb-8 border-b pb-4">
+             <h3 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+                <svg width="39" height="39" viewBox="0 0 39 39" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3.25 35.75H35.75M25.35 16.25H28.275C28.9646 16.25 29.6259 16.5239 30.1135 17.0115C30.6011 17.4991 30.875 18.1604 30.875 18.85V26.65C30.875 27.3396 30.6011 28.0009 30.1135 28.4885C29.6259 28.9761 28.9646 29.25 28.275 29.25H25.35C24.6604 29.25 23.9991 28.9761 23.5115 28.4885C23.0239 28.0009 22.75 27.3396 22.75 26.65V18.85C22.75 18.1604 23.0239 17.4991 23.5115 17.0115C23.9991 16.5239 24.6604 16.25 25.35 16.25ZM10.725 3.25H13.65C13.9914 3.25 14.3295 3.31725 14.645 3.44791C14.9604 3.57858 15.247 3.77009 15.4885 4.01152C15.7299 4.25295 15.9214 4.53958 16.0521 4.85502C16.1827 5.17047 16.25 5.50856 16.25 5.85V26.65C16.25 27.3396 15.9761 28.0009 15.4885 28.4885C15.0009 28.9761 14.3396 29.25 13.65 29.25H10.725C10.0354 29.25 9.37412 28.9761 8.88652 28.4885C8.39893 28.0009 8.125 27.3396 8.125 26.65V5.85C8.125 5.16044 8.39893 4.49912 8.88652 4.01152C9.37412 3.52393 10.0354 3.25 10.725 3.25Z" stroke="#FEB516" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Detail Transaksi
+            </h3>
+            <a href={`/admin/transactions?date=${dateParam}&search=${searchParam}`} class="text-gray-400 hover:text-red-500 text-sm font-bold no-underline">
+                ✕ Tutup
+            </a>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-12">
+            
+            {/* KOLOM KIRI: INFO STATUS */}
+            <div class="w-full lg:w-1/3 space-y-4 text-sm">
+                <div class="grid grid-cols-3 gap-2">
+                    <span class="text-gray-500 font-medium">ID Transaksi</span>
+                    <span class="col-span-2 font-bold text-gray-800">#{selectedTransaction.ORDER_ID}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <span class="text-gray-500 font-medium">Tanggal</span>
+                    <span class="col-span-2 font-bold text-gray-800">{formatDate(selectedTransaction.ORDER_DATE)}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <span class="text-gray-500 font-medium">Status</span>
+                    <span class="col-span-2"><span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">PAID</span></span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <span class="text-gray-500 font-medium">Pembayaran</span>
+                    <span class="col-span-2 font-bold text-gray-800">{selectedTransaction.PAYMENT_METHOD}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <span class="text-gray-500 font-medium">Nama</span>
+                    <span class="col-span-2 font-bold text-gray-800 text-lg">{selectedTransaction.CUST_NAME}</span>
+                </div>
+            </div>
+
+            {/* KOLOM KANAN: TABEL ITEM */}
+            <div class="w-fit lg:w-2/3">
+                <div class="border-l-4 border-yellow-400 pl-4 mb-4">
+                    <h4 class="font-bold text-gray-800">Item Dibeli</h4>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-200 text-gray-600">
+                            <tr>
+                                <th class="py-2 px-4 text-left">Item</th>
+                                <th class="py-2 px-4 text-right">Harga Satuan</th>
+                                <th class="py-2 px-4 text-center">Qty</th>
+                                <th class="py-2 px-4 text-right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                             {detailItems.length > 0 ? detailItems.map((item: any) => (
+                                <tr>
+                                    <td class="py-3 px-4 font-medium text-gray-700">{item.PRODUCT_NAME}</td>
+                                    <td class="py-3 px-4 text-right text-gray-500">{formatRupiah(item.PRICE)}</td>
+                                    <td class="py-3 px-4 text-center font-bold">x{item.QTY}</td>
+                                    <td class="py-3 px-4 text-right font-bold text-gray-800">{formatRupiah(item.SUBTOTAL)}</td>
+                                </tr>
+                             )) : (
+                                 <tr><td colspan="4" class="text-center py-4 text-gray-400">Item kosong.</td></tr>
+                             )}
+                        </tbody>
+                        <tfoot class="bg-white border-t-2 border-gray-200">
+                            <tr>
+                                <td colspan="3" class="py-4 px-4 text-right font-bold text-gray-600">Ringkasan Pembayaran</td>
+                                <td class="py-4 px-4 text-right font-black text-lg text-gray-800">
+                                    {/* LOGIKA TOTAL YANG SUDAH DIPERBAIKI (HITUNG ULANG) */}
+                                    {formatRupiah(
+                                        detailItems.length > 0 
+                                        ? detailItems.reduce((acc: number, item: any) => acc + Number(item.SUBTOTAL), 0)
+                                        : selectedTransaction.TOTAL
+                                    )}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+      </div>
+  )}
+
 </AdminLayout>
 
+<script>
+    // Auto Scroll saat klik detail
+    document.addEventListener("DOMContentLoaded", () => {
+        if (new URLSearchParams(window.location.search).has('id')) {
+            setTimeout(() => {
+                document.getElementById("detail-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 300);
+        }
+    });
+</script>

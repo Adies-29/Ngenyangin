@@ -1,51 +1,35 @@
 ---
 import PublicLayout from "../../layouts/PublicLayout.astro";
 
-// 1. Ambil ID dari URL (Browser)
-const rawId = Astro.url.searchParams.get("id");
-const id = rawId ? rawId.toString() : "";
+// 1. Ambil ID dari URL
+const id = Astro.url.searchParams.get("id");
 
 let product = null;
 
-// 2. FETCH DATA DARI BACKEND
-// Kita ambil semua data dulu, baru kita cari yang ID-nya cocok.
-// (Cara ini aman kalau kamu belum buat endpoint khusus /api/products/:id di backend)
 try {
+    // 2. FETCH DATA & CARI (Tanpa Mapping)
+    // Kita langsung pakai data mentah dari backend
     const res = await fetch('http://localhost:3000/api/products');
     const data = await res.json();
     const allProducts = data.data || data || [];
 
-    // 3. CARI PRODUK YANG ID-NYA COCOK
-    // Perhatikan: di Database namanya PRODUCT_ID
-    const found = allProducts.find((p:any) => String(p.PRODUCT_ID) === String(id));
-
-    if (found) {
-        // 4. MAPPING (Translate Database -> Frontend)
-        product = {
-            id: found.PRODUCT_ID,
-            name: found.PRODUCT_NAME,
-            price: found.PRICE,
-            stock: found.STOCK,
-            category: found.CATEGORY_ID,
-            description: found.DESCRIPTION || "Deskripsi belum tersedia di database.", 
-            image: found.IMAGE || "https://placehold.co/400x600?text=No+Image"
-        };
-    }
+    // Cari produk yang ID-nya cocok
+    product = allProducts.find((p: any) => String(p.PRODUCT_ID) === String(id));
 
 } catch (error) {
     console.log("Gagal ambil detail produk:", error);
 }
 
-// 5. Kalau produk tidak ketemu, redirect ke home atau tampilkan pesan
+// 3. Kalau produk tidak ketemu, redirect ke home
 if (!product) {
     return Astro.redirect('/');
 }
 
 // Helper Format Rupiah
-const formatRupiah = (num:number) => "Rp " + num.toLocaleString('id-ID');
+const formatRupiah = (num: number) => "Rp " + Number(num).toLocaleString('id-ID');
 ---
 
-<PublicLayout title={product.name}>
+<PublicLayout title={product.PRODUCT_NAME}>
     
     <div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         
@@ -53,8 +37,8 @@ const formatRupiah = (num:number) => "Rp " + num.toLocaleString('id-ID');
             
             <div class="md:w-1/2 bg-gray-100 relative min-h-[300px] flex items-center justify-center p-8">
                 <img 
-                    src={product.image} 
-                    alt={product.name} 
+                    src={product.IMAGE || "https://placehold.co/400x600?text=No+Image"} 
+                    alt={product.PRODUCT_NAME} 
                     class="w-full h-auto object-contain rounded-xl shadow-sm hover:scale-105 transition duration-500"
                 />
             </div>
@@ -63,24 +47,24 @@ const formatRupiah = (num:number) => "Rp " + num.toLocaleString('id-ID');
                 
                 <div class="mb-4">
                     <span class="text-blue-600 font-bold tracking-wider text-sm uppercase">
-                        KATEGORI ID: {product.category}
+                        KATEGORI ID: {product.CATEGORY_ID}
                     </span>
                 </div>
 
                 <h1 class="text-4xl font-black text-gray-900 mb-4 leading-tight">
-                    {product.name}
+                    {product.PRODUCT_NAME}
                 </h1>
 
                 <p class="text-gray-500 text-lg mb-8 leading-relaxed">
-                    {product.description}
+                    {product.DESCRIPTION || "Deskripsi belum tersedia di database."}
                 </p>
 
                 <div class="flex items-center gap-4 mb-8">
                     <span class="text-4xl font-black text-[#C90003] tracking-tight">
-                        {formatRupiah(product.price)}
+                        {formatRupiah(product.PRICE)}
                     </span>
                     <span class="text-sm text-gray-400 font-medium bg-gray-100 px-3 py-1 rounded-full">
-                        Stok: {product.stock}
+                        Stok: {product.STOCK}
                     </span>
                 </div>
 

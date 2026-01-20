@@ -4,177 +4,156 @@ import "../style/global.css";
 import PublicLayout from "../layouts/PublicLayout.astro";
 import ProductCard from "../components/ProductCard.astro";
 
-// 1. FUNGSI PEMBANTU (MAPPING)
-// Kita pisahkan logika "translasi" data di sini supaya kodingan utama bersih.
-const mapDatabaseToFrontend = (p:any) => ({
-    id: p.PRODUCT_ID,
-    name: p.PRODUCT_NAME,
-    price: p.PRICE,
-    stock: p.STOCK,
-    category: p.CATEGORY_ID,
-    image: p.IMAGE || "https://placehold.co/400x600?text=No+Image"
-});
+// --- 1. SETUP LOGIKA SERVER-SIDE ---
 
-let products : any[] = [];
-// 2. FETCH DATA (ONE-LINER STYLE)
+// Ambil parameter '?category=...' dari URL browser
+const activeCategory = Astro.url.searchParams.get('category');
+
+let products: any[] = [];
+let categories: any[] = [];
+
 try {
-    const res = await fetch('http://localhost:3000/api/products');
-    const data = await res.json();
+    // A. Fetch Kategori (Untuk tombol navigasi di atas produk)
+    const resCat = await fetch('http://localhost:3000/api/categories');
+    const dataCat = await resCat.json();
+    const rawCats = dataCat.data || dataCat || [];
     
-    // 3. SMART EXTRACTION (Operator ||)
-    // "Ambil data.data, kalau gak ada, ambil data langsung, kalau gak ada, kasih array kosong"
-    const rawItems = data.data || data || []; 
+    // Mapping Kategori
+    categories = Array.isArray(rawCats) ? rawCats.map((c: any) => ({
+        id: c.CATEGORY_ID || c.id,
+        name: c.CATEGORY || c.name
+    })) : [];
 
-    // 4. JALANKAN MAPPING
-    // Pastikan rawItems itu Array sebelum di-map supaya tidak error
-    if (Array.isArray(rawItems)) {
-        products = rawItems.map(mapDatabaseToFrontend);
+    // B. Fetch Produk
+    const resProd = await fetch('http://localhost:3000/api/products');
+    const dataProd = await resProd.json();
+    let rawProds = dataProd.data || dataProd || [];
+
+    // --- C. LOGIKA FILTER (Jantungnya disini) ---
+    // Jika ada kategori di URL (misal: ?category=MK), buang produk lain!
+    if (activeCategory) {
+        rawProds = rawProds.filter((p: any) => String(p.CATEGORY_ID) === String(activeCategory));
+    }
+
+    // D. Mapping Produk ke Frontend
+    if (Array.isArray(rawProds)) {
+        products = rawProds.map((p: any) => ({
+            id: p.PRODUCT_ID,
+            name: p.PRODUCT_NAME,
+            price: p.PRICE,
+            stock: p.STOCK,
+            categoryId: p.CATEGORY_ID,
+            image: p.IMAGE || "https://placehold.co/400x600?text=No+Image"
+        }));
     }
 
 } catch (e) {
-    console.log("Backend error/offline");
+    console.log("Backend error/offline:", e);
 }
-
-const formatRupiah = (num:number) => "Rp." + num.toLocaleString('id-ID');
 ---
 
 <PublicLayout title="Beranda">
-	<section id="home" class="relative h-[90vh] flex items-center overflow-hidden">
-		<div class="absolute inset-0 z-0">
-			<img
-				src="https://i.ibb.co.com/zVgQdrvb/8d7d7abc88be81941a453b0f2825300062d41cf4.jpg"
-				alt="Background Food"
-				class="w-full h-full object-cover"
-			/>
-			<div
-				class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"
-			>
-			</div>
-		</div>
+    
+    <section id="home" class="relative h-[90vh] flex items-center overflow-hidden">
+        <div class="absolute inset-0 z-0">
+            <img src="https://i.ibb.co.com/zVgQdrvb/8d7d7abc88be81941a453b0f2825300062d41cf4.jpg" alt="Background Food" class="w-full h-full object-cover" />
+            <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"></div>
+        </div>
+        <div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
+            <div class="max-w-2xl">
+                <h1 class="text-white text-6xl md:text-7xl font-extrabold leading-tight">
+                    Nikmati Lezatnya<br />
+                    <span class="text-[#FFC107]">Hidangan<br />Nusantara</span>
+                </h1>
+                <p class="text-gray-200 text-lg md:text-xl mt-8 leading-relaxed max-w-lg">
+                    Rendang bukan sekadar makanan, tapi momen happy yang bikin makan lebih hidup.
+                </p>
+                <div class="mt-10">
+                    <a href="/#kategori" class="bg-[#FFC107] hover:bg-yellow-500 text-red-900 px-10 py-4 rounded-2xl font-extrabold text-lg shadow-xl transition transform hover:scale-105 inline-block">
+                        Beli Sekarang
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
 
-		<div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
-			<div class="max-w-2xl">
-				<h1
-					class="text-white text-6xl md:text-7xl font-extrabold leading-tight"
-				>
-					Nikmati Lezatnya<br />
-					<span class="text-[#FFC107]">Hidangan<br />Nusantara</span>
-				</h1>
+    <section id="menu" class="min-h-[80vh] flex flex-col justify-center items-center bg-gradient-to-b from-[#CE9B62] to-[#FFFEFD] overflow-hidden font-sans py-20">
+        <h2 class="text-3xl font-black text-white mb-12">Menu Favorit</h2>
+        <div class="relative w-[340px] md:w-[440px] h-[300px] mb-10 perspective-container">
+            <div class="menu-card pos-left"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQrHpsBaKbToLPTg7VBtmDEznneOkPfZetcag&s" /><div class="card-content"><h2 class="text-2xl font-black text-center text-white drop-shadow-md">Es Mambalabu<br>Enak</h2><button onclick="window.location.href='/product?id=2851'" type="button">Beli Sekarang</button></div></div>
+            <div class="menu-card pos-center"><img src="https://assets.unileversolutions.com/recipes-v2/257536.jpg" /><div class="card-content"><h2 class="text-2xl font-black text-center text-white drop-shadow-md">Burger<br>Ngenyangin</h2><button onclick="window.location.href='/product?id=2850'" type="button">Beli Sekarang</button></div></div>
+            <div class="menu-card pos-right"><img src="https://awsimages.detik.net.id/community/media/visual/2022/06/16/ilustrasi-es-krim-stroberi-1.jpeg?w=1200" /><div class="card-content"><h2 class="text-2xl font-black text-center text-white drop-shadow-md">Rusdi<br>Eskrim</h2><button onclick="window.location.href='/product?id=2852'" type="button">Beli Sekarang</button></div></div>
+        </div>
+    </section>
 
-				<p
-					class="text-gray-200 text-lg md:text-xl mt-8 leading-relaxed max-w-lg"
-				>
-					Rendang bukan sekadar makanan, tapi momen happy yang bikin
-					makan lebih hidup, dan selalu pengin nambah lagi.
-				</p>
-
-				<div class="mt-10">
-					<a
-						href="#menu"
-						class="bg-[#FFC107] hover:bg-yellow-500 text-red-900 px-10 py-4 rounded-2xl font-extrabold text-lg shadow-xl transition transform hover:scale-105 inline-block"
-					>
-						Beli Sekarang
-					</a>
-				</div>
-			</div>
-		</div>
-	</section>
-
-
-	<section id="menu" class="py-8 bg-gradient-to-b from-[#D4A373] to-[#FDFBF7]">
-		<div class="max-w-7xl mx-auto px-4 text-center">
-			<h2 class="text-3xl font-extrabold text-white mb-8">
-				Menu Makanan Favorit
-			</h2>
-
-			<!-- WRAPPER -->
-			<div
-				id="slider"
-				class="relative flex justify-center items-center gap-8 overflow-hidden"
-			>
-				<!-- CARD KIRI -->
-				<div
-					id="leftCard"
-					class="hidden md:block w-[240px] h-[300px] rounded-2xl overflow-hidden opacity-50 blur-sm transition-all duration-500 ease-in-out"
-				>
-					<img
-						src="https://images.unsplash.com/photo-1490818387583-1baba5e638af"
-						class="w-full h-full object-cover"
-					/>
-				</div>
-
-				<!-- CARD UTAMA -->
-				<div
-					id="mainCard"
-					class="relative w-full max-w-[600px] h-[360px] rounded-3xl overflow-hidden shadow-2xl z-10 transition-all duration-500 ease-in-out"
-				>
-					<img
-						src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd"
-						class="w-full h-full object-cover"
-					/>
-
-					<!-- OVERLAY -->
-					<div
-						class="absolute inset-0 bg-black/40 flex flex-col justify-center items-start p-10 text-left">
-						<h3
-							class="text-white text-4xl font-black leading-tight">
-							Burger<br />Ngenyangin
-						</h3>
-						<a
-							href="#"
-							class="mt-6 bg-[#FFC107] text-red-900 px-6 py-2 rounded-full font-bold text-sm hover:scale-105 transition">
-							Beli Sekarang
-						</a>
-					</div>
-				</div>
-
-				<!-- CARD KANAN -->
-				<div
-					id="rightCard"
-					class="hidden md:block w-[260px] h-[320px] rounded-2xl overflow-hidden opacity-50 blur-sm transition-all duration-500 ease-in-out">
-					<img
-						src="https://images.unsplash.com/photo-1544025162-d76694265947"
-						class="w-full h-full object-cover"/>
-				</div>
-			</div>
-
-			<!-- BUTTON -->
-			<div class="mt-10 mb-5">
-				<a
-					href="/menu"
-					class="bg-[#C81E1E] text-white px-10 py-3 rounded-full font-bold text-lg shadow-xl hover:bg-red-700 transition">
-					Lihat Semua
-				</a>
-			</div>
-		</div>
-	</section>
-
-	<section id="kategori" class="py-20 bg-[#FDFBF7]">
+    <section id="kategori" class="py-20 bg-[#FDFBF7] min-h-screen">
         <div class="max-w-7xl mx-auto px-6">
             
-            <div id="produk" class="mb-12 text-center">
-                <h2 class="text-4xl font-black text-[#3D2C2A] tracking-wide">
-                    Daftar Produk
-                </h2>
+            <div id="produk" class="mb-8 text-center">
+                <h2 class="text-4xl font-black text-[#3D2C2A] tracking-wide">Daftar Produk</h2>
                 <div class="h-1 w-24 bg-[#FFC107] mx-auto mt-4 rounded-full"></div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div class="flex flex-wrap justify-center gap-4 mb-12">
                 
-                {products.length > 0 ? (
-                    products.map((p) => <ProductCard product={p} />)
-                ) : (
-                    <div class="col-span-full text-center py-10">
-                        <p class="text-gray-500 font-bold">Gagal memuat data (Cek Backend)</p>
-                    </div>
-                )}
+                <a href="/#kategori" 
+                   class={`px-6 py-2 rounded-full border-2 font-bold transition-all ${
+                       !activeCategory 
+                       ? 'bg-[#FFC107] text-[#3D2C2A] border-[#FFC107] shadow-lg scale-105' 
+                       : 'bg-white text-gray-500 border-transparent hover:border-[#FFC107]'
+                   }`}>
+                    Semua
+                </a>
 
+                {categories.map((cat) => (
+                    <a href={`/?category=${cat.id}#kategori`} 
+                       class={`px-6 py-2 rounded-full border-2 font-bold transition-all ${
+                           String(activeCategory) === String(cat.id) 
+                           ? 'bg-[#FFC107] text-[#3D2C2A] border-[#FFC107] shadow-lg scale-105' 
+                           : 'bg-white text-gray-500 border-transparent hover:border-[#FFC107]'
+                       }`}>
+                        {cat.name}
+                    </a>
+                ))}
             </div>
 
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {products.length > 0 ? (
+                    products.map((p) => (
+                        <ProductCard product={p} />
+                    ))
+                ) : (
+                    <div class="col-span-full text-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <p class="text-gray-400 text-xl font-bold mb-2">Produk tidak ditemukan di kategori ini 😔</p>
+                        <a href="/#kategori" class="text-red-600 font-bold hover:underline">Lihat semua produk</a>
+                    </div>
+                )}
+            </div>
         </div>
     </section>
+
 </PublicLayout>
 
-<script src="/src/scripts/searchMenu.js"></script>
+<script src="../scripts/slider3d.js"></script> 
 
-
+<style>
+    /* CSS Slider 3D (Tetap dipertahankan) */
+    .perspective-container { perspective: 1000px; }
+    .menu-card {
+        position: absolute; inset: 0; border-radius: 20px; overflow: hidden; cursor: pointer;
+        border: none;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        transition: transform 0.6s cubic-bezier(.25,.8,.25,1), opacity 0.6s ease, z-index 0s;
+    }
+    .menu-card img { width: 100%; height: 100%; object-fit: cover; }
+    .pos-center { transform: translateX(0) scale(1); opacity: 1; z-index: 30; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+    .pos-left { transform: translateX(-60%) scale(0.8); opacity: 0.6; z-index: 10; filter: blur(1px); }
+    .pos-right { transform: translateX(60%) scale(0.8); opacity: 0.6; z-index: 10; filter: blur(1px); }
+    .card-content {
+        position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1.5rem; color: white; transition: opacity 0.3s ease; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent 60%);
+    }
+    .menu-card .card-content { opacity: 0; }
+    .pos-center .card-content { opacity: 1; }
+    .card-content button { margin-top: 0.5rem; padding: 0.5rem 1.5rem; border-radius: 9999px; border: none; background-color: #FFC107; font-weight: bold; color: #450a0a; cursor: pointer; transition: all 0.2s; }
+    .card-content button:hover { background-color: white; transform: scale(1.05); }
+</style>

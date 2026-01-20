@@ -19,8 +19,8 @@ try {
     const rawCategories = dataCat.data || dataCat || [];
 
     categories = rawCategories.map((c: any) => ({
-        id: c.CATEGORY_ID || c.category_id || c.id,
-        name: c.CATEGORY || c.category_name || c.name || "Tanpa Nama",
+        id: c.CATEGORY_ID,
+        name: c.CATEGORY,
     }));
 } catch (e) {
     console.error("Gagal load kategori:", e);
@@ -59,7 +59,8 @@ if (Astro.request.method === "POST") {
         const price = formData.get("price");
         const stock = formData.get("stock");
         const category_id = formData.get("category_id");
-        const description = formData.get("description");
+        const product_id = formData.get("product_id")
+        
 
         // Siapkan Payload JSON untuk Backend
         // Struktur JSON disamakan dengan script lama kamu
@@ -68,8 +69,8 @@ if (Astro.request.method === "POST") {
             price: price,
             stock: stock,
             category_id: category_id,
-            updated_by: "Admin",    // Hardcode sesuai logic lama
-            description: description,
+            updated_by: "Admin",
+            product_id: product_id,    // Hardcode sesuai logic lama
             image: "no-image.jpg"   // Default handling
         };
 
@@ -92,7 +93,7 @@ if (Astro.request.method === "POST") {
             // supaya data yang diketik tidak hilang saat error muncul
             product = { 
                 ...product, 
-                name, price, stock, categoryId: category_id, description 
+                name, price, stock, categoryId: category_id
             };
         }
 
@@ -190,19 +191,7 @@ if (Astro.request.method === "POST") {
                             <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                         </div>
                     </div>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-gray-800 font-semibold text-sm">
-                        Deskripsi
-                    </label>
-                    <textarea
-                        name="description"
-                        rows="4"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-                    >{product.description}</textarea>
-                </div>
-
+                </div>  
                 <div class="flex justify-end pt-6 border-t border-gray-100">
                     <button
                         type="submit"

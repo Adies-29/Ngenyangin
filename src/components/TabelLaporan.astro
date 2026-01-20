@@ -1,0 +1,64 @@
+---
+// src/components/TableLaporan.astro
+const { title, data = [], firstColTitle, firstColKey } = Astro.props;
+
+// Helper Format Angka Singkat
+const formatRingkas = (num:number) => {
+    if (!num) return "-";
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + " Jt";
+    if (num >= 1000) return (num / 1000).toFixed(0) + " Rb";
+    return num;
+};
+---
+
+<div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-8">
+    <h3 class="font-bold text-xl text-gray-800 mb-4">{title}</h3>
+    
+    <div class="overflow-x-auto border rounded-xl max-h-[600px] overflow-y-auto">
+        <table class="w-full text-sm text-left whitespace-nowrap">
+            <thead class="bg-gray-200 text-black uppercase text-xs sticky top-0 z-20">
+                <tr>
+                    <th class="py-3 px-4 sticky left-0 z-10 bg-gray-200 border-r border-gray-600 w-48">{firstColTitle}</th>
+                    <th class="py-3 px-4 text-center w-20">Jan</th>
+                    <th class="py-3 px-4 text-center w-20">Feb</th>
+                    <th class="py-3 px-4 text-center w-20">Mar</th>
+                    <th class="py-3 px-4 text-center w-20">Apr</th>
+                    <th class="py-3 px-4 text-center w-20">Mei</th>
+                    <th class="py-3 px-4 text-center w-20">Jun</th>
+                    <th class="py-3 px-4 text-center w-20">Jul</th>
+                    <th class="py-3 px-4 text-center w-20">Agu</th>
+                    <th class="py-3 px-4 text-center w-20">Sep</th>
+                    <th class="py-3 px-4 text-center w-20">Okt</th>
+                    <th class="py-3 px-4 text-center w-20">Nov</th>
+                    <th class="py-3 px-4 text-center w-20">Des</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {data.length > 0 ? data.map((item:any) => (
+                    <tr class="hover:bg-gray-50 transition">
+                        {/* KOLOM PERTAMA DINAMIS (Bisa Produk, Customer, atau Kasir) */}
+                        <td class="py-3 px-4 font-bold text-gray-800 sticky left-0 z-10 bg-white border-r drop-shadow-sm">
+                            {item[firstColKey]}
+                        </td>
+                        
+                        {/* DATA BULANAN (Pastikan backend kirim nama kolom 'Januari' dst) */}
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Januari)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Februari)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Maret)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.April)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Mei)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Juni)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Juli)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Agustus)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.September)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Oktober)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.November)}</td>
+                        <td class="py-3 px-4 text-center text-gray-600">{formatRingkas(item.Desember)}</td>
+                    </tr>
+                )) : (
+                    <tr><td colspan="13" class="text-center py-4 text-gray-400">Data tidak ditemukan.</td></tr>
+                )}
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -20,7 +20,7 @@ if (Astro.request.method === "POST") {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                category_id: id,  // Mapping: form 'id' -> backend 'category_id'
+                id: id,  // Mapping: form 'id' -> backend 'id'
                 category: name    // Mapping: form 'name' -> backend 'category'
             }),
         });

@@ -9,7 +9,6 @@ let oldData = {
     price: "", 
     stock: "", 
     category_id: "", 
-    description: "" 
 };
 
 // --- 2. AMBIL DATA KATEGORI (Untuk Dropdown) ---
@@ -36,26 +35,26 @@ if (Astro.request.method === "POST") {
         const price = formData.get("price");
         const stock = formData.get("stock");
         const category_id = formData.get("category_id");
-        const description = formData.get("description");
-
+        
+      
         // Simpan ke oldData (jaga-jaga kalau error, input gak hilang)
         oldData = {
             name: name?.toString() || "",
             price: price?.toString() || "",
             stock: stock?.toString() || "",
-            category_id: category_id?.toString() || "",
-            description: description?.toString() || ""
+            category_id: category_id?.toString() || ""
+            
+
         };
 
         // Siapkan Payload JSON untuk Backend
         const payload = {
-            product_name: name,         // Sesuai name form
-            price: price,
-            stock: stock,
-            category_id: category_id,   // Jangan lupa kirim kategori
-            description: description,
-            created_by: "Admin",        // Hardcode sesuai logic lama
-            image: "no-image.jpg"       // Default image
+            product_name: name,         
+            price: Number(price),
+            stock: Number(stock),
+            category_id: category_id,
+            created_by: 'Admin',           
+            image: "no-image.jpg"       
         };
 
         // Kirim ke Backend API
@@ -68,8 +67,10 @@ if (Astro.request.method === "POST") {
         const result = await response.json();
 
         if (response.ok) {
+
             // Sukses? Redirect ke halaman list
             return Astro.redirect("/admin/products");
+
         } else {
             // Gagal? Tampilkan pesan error
             errorMessage = result.message || "Gagal menyimpan data ke backend.";
@@ -180,18 +181,6 @@ if (Astro.request.method === "POST") {
                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                     </div>
                 </div>
-            </div>
-
-            <div class="space-y-2">
-                <label class="block text-gray-800 font-semibold text-sm mb-1">
-                    Deskripsi
-                </label>
-                <textarea 
-                    name="description" 
-                    rows="4" 
-                    placeholder="Jelaskan produkmu..."
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 resize-none"
-                >{oldData.description}</textarea>
             </div>
 
             <div class="flex flex-col sm:flex-row justify-end gap-4 pt-6 border-t border-gray-200">

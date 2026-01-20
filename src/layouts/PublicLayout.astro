@@ -6,6 +6,21 @@ import logo from "../assets/logo1.png";
 import Footer from "../components/Footer.astro";
 
 const { title } = Astro.props;
+
+// --- 1. FETCH DATA KATEGORI (Untuk Dropdown) ---
+let categories = [];
+try {
+  const res = await fetch('http://localhost:3000/api/categories');
+  const data = await res.json();
+  categories = data.data || data || [];
+} catch (e) {
+  // Dummy data jika backend mati
+  categories = [
+    { id: 1, name: "Makanan Berat" },
+    { id: 2, name: "Minuman" },
+    { id: 3, name: "Snack" }
+  ];
+}
 ---
 
 <html lang="id">
@@ -27,35 +42,59 @@ const { title } = Astro.props;
             is:inline></script>
     </head>
     <body class="bg-[#FDFBF7] font-['Poppins']">
+        
         <nav class="bg-[#C81E1E] py-4 shadow-lg sticky top-0 z-50">
-            <div
-                class="max-w-7xl mx-auto px-6 flex justify-between items-center"
-            >
+            <div class="max-w-7xl mx-auto px-6 flex justify-between items-center">
+                
                 <div class="flex items-center">
-                    <Image src={logo} alt="Logo" class="h-10 w-auto" />
+                    <a href="/">
+                        <Image src={logo} alt="Logo" class="h-10 w-auto" />
+                    </a>
                 </div>
 
-                <div
-                    class="hidden md:flex items-center space-x-10 text-white font-bold"
-                >
-                    <a
-                        href="/#home"
-                        class="nav-link transition pb-1 hover:text-yellow-400">
+                <div class="hidden md:flex items-center space-x-10 text-white font-bold h-full">
+                    
+                    <a href="/#home" class="nav-link transition pb-1 hover:text-yellow-400">
                         Home
                     </a>
 
-                    <a
-                        href="/#menu"
-                        class="nav-link transition pb-1 hover:text-yellow-400">
+                    <a href="/#menu" class="nav-link transition pb-1 hover:text-yellow-400">
                         Our Menu
                     </a>
 
-                    <a
-                        href="/#kategori"
-                        class="nav-link transition pb-1 hover:text-yellow-400">
-                        Kategori
-                    </a>
-                </div>
+                    <div class="relative group py-2"> <a href="/#kategori" class="nav-link transition pb-1 hover:text-yellow-400 flex items-center gap-1 cursor-pointer">
+                            Kategori
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </a>
+
+                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden hidden group-hover:block transition-all z-50">
+                            
+                            <div class="h-4 w-full absolute -top-4"></div>
+
+                            <div class="flex flex-col py-2">
+                                {/* Tombol "Lihat Semua" */}
+                                <a href="/#kategori" class="px-6 py-3 text-gray-800 hover:bg-yellow-50 hover:text-red-600 transition text-sm font-bold border-b border-gray-100">
+                                    Lihat Semua
+                                </a>
+
+                                {/* Loop Kategori dari Database */}
+                                {categories.length > 0 ? categories.map((cat: any) => (
+                                    <a 
+                                      href={`/?category=${cat.CATEGORY_ID || cat.id}#kategori`} 
+                                      class="px-6 py-3 text-gray-600 hover:bg-yellow-50 hover:text-red-600 transition text-sm border-b border-gray-50 last:border-none flex justify-between items-center group/item"
+                                    >
+                                        {cat.CATEGORY || cat.name}
+                                        <span class="text-gray-300 group-hover/item:text-red-400 opacity-0 group-hover/item:opacity-100 transition">→</span>
+                                    </a>
+                                )) : (
+                                    <span class="px-6 py-3 text-sm text-gray-400">Loading...</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    </div>
 
                 <div class="flex justify-end gap-4">
                     <div class="relative hidden sm:block">
@@ -63,16 +102,15 @@ const { title } = Astro.props;
                             id="search-input"
                             type="text"
                             placeholder="Cari Menu"
-                            class="bg-red-900/50 border border-red-700 text-white rounded-full py-2 px-6 pl-10 focus:outline-none focus:ring-2 focus:ring-yellow-400 w-48 text-sm"
+                            class="bg-red-900/50 border border-red-700 text-white rounded-full py-2 px-6 pl-10 focus:outline-none focus:ring-2 focus:ring-yellow-400 w-48 text-sm placeholder-red-200"
                         />
                         <span class="absolute left-4 top-2.5 text-red-300">
                             🔍
                         </span>
                     </div>
-                    <div
-                        class="bg-white text-red-600 w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-md cursor-pointer">
+                    <a href="/login" class="bg-white hover:bg-gray-100 text-red-600 w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-md cursor-pointer transition">
                         A
-                    </div>
+                    </a>
                 </div>
             </div>
         </nav>
@@ -80,27 +118,27 @@ const { title } = Astro.props;
         <main>
             <slot />
         </main>
+        
         <Footer />
 
         <script src="../scripts/navbar.js"></script>
 
         <style>
-            /* Saat class ini aktif, teks jadi kuning */
+            /* Highlight Menu Aktif (Scroll Spy) */
             .active-nav {
                 color: #ffc107 !important;
                 position: relative;
             }
 
-            /* Membuat garis bawah kuning muncul otomatis */
             .active-nav::after {
                 content: "";
                 position: absolute;
-                bottom: -4px; /* Jarak garis dari teks */
+                bottom: -4px;
                 left: 0;
                 width: 100%;
-                height: 4px; /* Ketebalan garis */
+                height: 4px;
                 background-color: #ffc107;
-                border-radius: 9999px; /* Rounded full */
+                border-radius: 9999px;
                 transition: all 0.3s ease;
             }
         </style>
